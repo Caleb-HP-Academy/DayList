@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; media-src 'self' data:;" />
+  <title>Timer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="timer-window">
+    <header class="titlebar timer-titlebar">
+      <div class="titlebar-left"><span class="logo">⏱</span><span class="app-name">Timer</span></div>
+      <div class="titlebar-right no-drag">
+        <button id="btn-min" class="icon-btn" title="Hide">—</button>
+        <button id="btn-close" class="icon-btn close" title="Close">✕</button>
+      </div>
+    </header>
+
+    <div class="timer popout" id="timer-root">
+      <div class="timer-task"></div>
+      <div class="timer-display big">
+        <span class="timer-phase">WORK</span>
+        <span class="timer-time">60:00</span>
+      </div>
+      <div class="timer-controls">
+        <button data-tcmd="toggle" class="timer-btn primary">Start</button>
+        <button data-tcmd="reset" class="timer-btn">Reset</button>
+        <button data-tcmd="skip" class="timer-btn">Skip</button>
+        <button data-tcmd="cancel" class="timer-btn">Cancel</button>
+      </div>
+      <div class="timer-foot">
+        <button data-tcmd="popout" class="timer-mini">⧉ Pop out</button>
+        <button data-tcmd="settings" class="timer-mini">⚙ Settings</button>
+      </div>
+      <div class="timer-settings hidden">
+        <label class="ts-row">Work <input type="number" class="ts-work" min="1" max="300" /> min</label>
+        <label class="ts-row">Rest <input type="number" class="ts-rest" min="1" max="180" /> min</label>
+        <label class="ts-check"><input type="checkbox" class="ts-repeat" /> Auto-repeat cycles</label>
+        <label class="ts-check"><input type="checkbox" class="ts-sound" /> Chime sound</label>
+        <label class="ts-check ts-aot-row hidden"><input type="checkbox" class="ts-aot" /> Always on top</label>
+      </div>
+    </div>
+  </div>
+
+  <div id="alert-pulse" class="alert-pulse"></div>
+
+  <script src="timer-ui.js"></script>
+  <script src="timer.js"></script>
+</body>
+</html>

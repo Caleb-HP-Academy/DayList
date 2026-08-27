@@ -1,0 +1,81 @@
+{
+  "name": "daylist",
+  "version": "1.0.0",
+  "description": "A compact always-on-top daily todo widget with reminders and Claude sync",
+  "main": "main.js",
+  "author": {
+    "name": "Caleb Fiebig"
+  },
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac",
+    "pack": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.caleb.daylist",
+    "productName": "DayList",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "DayList.mcpb",
+        "to": "DayList.mcpb"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "publisherName": "Caleb Fiebig"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DayList",
+      "uninstallDisplayName": "DayList",
+      "runAfterFinish": true,
+      "artifactName": "DayList-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "DayList-Portable.exe"
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] }
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.productivity"
+    },
+    "dmg": {
+      "artifactName": "DayList-${version}-${arch}.dmg"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

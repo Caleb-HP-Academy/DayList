@@ -1,0 +1,39 @@
+{
+  "dxt_version": "0.1",
+  "name": "daylist",
+  "display_name": "DayList",
+  "version": "1.2.0",
+  "description": "Read and edit your DayList to-do widget from Claude — main list and projects. Add tasks, priorities, reminders, recurring tasks; complete, set the current focus, and review the archive. Changes appear live in the desktop widget.",
+  "author": {
+    "name": "Caleb"
+  },
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "server/server.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/server.js"]
+    }
+  },
+  "tools": [
+    { "name": "list_tasks", "description": "List tasks (main list or a project; filter by status/priority)" },
+    { "name": "add_task", "description": "Add a task (main list or a project) with priority, reminder, notes" },
+    { "name": "update_task", "description": "Update a task's fields by id or title" },
+    { "name": "complete_task", "description": "Mark a task complete" },
+    { "name": "set_current_task", "description": "Set the single 'current' focus task" },
+    { "name": "delete_task", "description": "Delete a task" },
+    { "name": "view_archive", "description": "Review archived completed tasks and notes" },
+    { "name": "list_projects", "description": "List DayList projects" },
+    { "name": "create_project", "description": "Create a new project (its own task list)" },
+    { "name": "list_recurring", "description": "List recurring task templates" },
+    { "name": "add_recurring", "description": "Add a recurring task (daily/weekdays/weekly, optional time)" },
+    { "name": "remove_recurring", "description": "Remove a recurring task template" }
+  ],
+  "compatibility": {
+    "platforms": ["win32"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}

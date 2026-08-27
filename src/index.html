@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; media-src 'self' data:;" />
+  <title>DayList</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Title bar -->
+    <header class="titlebar">
+      <div class="titlebar-left">
+        <span class="logo">✓</span>
+        <span class="app-name">DayList</span>
+      </div>
+      <div class="titlebar-center">
+        <span id="date-label"></span>
+      </div>
+      <div class="titlebar-right no-drag">
+        <button id="btn-projects" class="icon-btn main-only" title="Projects">📁</button>
+        <button id="btn-settings" class="icon-btn" title="Settings">⚙</button>
+        <button id="btn-min" class="icon-btn" title="Hide to tray">—</button>
+        <button id="btn-close" class="icon-btn close" title="Close window">✕</button>
+      </div>
+    </header>
+
+    <!-- Progress -->
+    <div class="progress-wrap">
+      <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+      <span id="progress-text" class="progress-text">0 / 0</span>
+    </div>
+
+    <!-- Settings panel -->
+    <section id="settings-panel" class="settings-panel hidden">
+      <label class="setting-row">
+        <span>Always on top</span>
+        <input type="checkbox" id="set-aot" />
+      </label>
+      <label class="setting-row main-only">
+        <span>Run on startup</span>
+        <input type="checkbox" id="set-startup" />
+      </label>
+      <label class="setting-row">
+        <span>Opacity</span>
+        <input type="range" id="set-opacity" min="0.4" max="1" step="0.05" />
+      </label>
+      <label class="setting-row">
+        <span>Show completed</span>
+        <input type="checkbox" id="set-show-done" checked />
+      </label>
+      <label class="setting-row main-only">
+        <span>Show standup each morning</span>
+        <input type="checkbox" id="set-standup-morning" />
+      </label>
+      <div class="setting-row">
+        <button id="btn-archive" class="text-btn">🗄 Archive</button>
+        <button id="btn-recurring" class="text-btn">🔁 Recurring</button>
+        <button id="btn-folder" class="text-btn">Data folder</button>
+      </div>
+      <button id="btn-connect-claude" class="connect-btn main-only">✦ Connect to Claude app</button>
+      <div class="setting-hint" id="path-hint"></div>
+    </section>
+
+    <!-- New-day auto prompt -->
+    <div id="day-prompt" class="day-prompt hidden">
+      <span id="day-prompt-text">It's a new day. Archive yesterday's completed tasks?</span>
+      <div class="day-prompt-actions">
+        <button id="day-prompt-go" class="add-btn small">Start new day</button>
+        <button id="day-prompt-dismiss" class="text-btn">Not now</button>
+      </div>
+    </div>
+
+    <!-- Toolbar: Start new day + Standup -->
+    <div class="toolbar no-drag">
+      <button id="btn-newday-main" class="newday-btn">🌅 New day</button>
+      <button id="btn-standup" class="newday-btn standup-btn main-only">📋 Standup</button>
+    </div>
+
+    <!-- Quick add -->
+    <div class="add-row no-drag">
+      <input type="text" id="add-input" placeholder="Add a task…  (Enter)" autocomplete="off" />
+      <select id="add-priority" title="Priority">
+        <option value="high">High</option>
+        <option value="medium" selected>Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <button id="add-btn" class="add-btn" title="Add">+</button>
+    </div>
+
+    <!-- Lists -->
+    <main id="lists" class="lists">
+      <section id="focus-group" class="prio-group focus-group hidden" data-priority="focus">
+        <div class="group-header focus-header"><span class="caret">▾</span>★ Current Focus</div>
+        <ul class="task-list focus-list" data-priority="focus"></ul>
+        <div class="timer" id="timer-panel">
+          <div class="timer-display">
+            <span class="timer-phase">WORK</span>
+            <span class="timer-time">60:00</span>
+          </div>
+          <div class="timer-controls">
+            <button data-tcmd="toggle" class="timer-btn primary">Start</button>
+            <button data-tcmd="reset" class="timer-btn" title="Reset phase">Reset</button>
+            <button data-tcmd="skip" class="timer-btn" title="Skip to next phase">Skip</button>
+            <button data-tcmd="cancel" class="timer-btn" title="Cancel timer">Cancel</button>
+          </div>
+          <div class="timer-foot">
+            <button data-tcmd="popout" class="timer-mini">⧉ Pop out</button>
+            <button data-tcmd="settings" class="timer-mini">⚙ Timer settings</button>
+          </div>
+          <div class="timer-settings hidden">
+            <label class="ts-row">Work <input type="number" class="ts-work" min="1" max="300" /> min</label>
+            <label class="ts-row">Rest <input type="number" class="ts-rest" min="1" max="180" /> min</label>
+            <label class="ts-check"><input type="checkbox" class="ts-repeat" /> Auto-repeat cycles (work→rest→…)</label>
+            <label class="ts-check"><input type="checkbox" class="ts-sound" /> Chime sound</label>
+            <label class="ts-check ts-aot-row hidden"><input type="checkbox" class="ts-aot" /> Always on top</label>
+          </div>
+        </div>
+      </section>
+
+      <section class="prio-group" data-priority="high">
+        <div class="group-header"><span class="caret">▾</span><span class="dot dot-high"></span>High priority</div>
+        <ul class="task-list" data-priority="high"></ul>
+      </section>
+      <section class="prio-group" data-priority="medium">
+        <div class="group-header"><span class="caret">▾</span><span class="dot dot-medium"></span>Medium priority</div>
+        <ul class="task-list" data-priority="medium"></ul>
+      </section>
+      <section class="prio-group" data-priority="low">
+        <div class="group-header"><span class="caret">▾</span><span class="dot dot-low"></span>Low priority</div>
+        <ul class="task-list" data-priority="low"></ul>
+      </section>
+
+      <section id="done-group" class="prio-group done-group" data-priority="done">
+        <div class="group-header done-header">
+          <span><span class="caret">▾</span>Completed today</span><span id="done-count" class="done-count">0</span>
+        </div>
+        <ul class="task-list done-list" data-priority="done"></ul>
+      </section>
+    </main>
+  </div>
+
+  <!-- Backdrop: click anywhere outside the sidebar to close it -->
+  <div id="detail-backdrop" class="detail-backdrop hidden"></div>
+
+  <!-- Detail sidebar -->
+  <aside id="detail" class="detail closed">
+    <div class="detail-head">
+      <button id="detail-close" class="icon-btn" title="Close">←</button>
+      <span class="detail-title-label">Task details</span>
+      <button id="detail-delete" class="icon-btn del" title="Delete task">🗑</button>
+    </div>
+    <div class="detail-body">
+      <input type="text" id="detail-title" class="detail-title-input" placeholder="Task title" />
+
+      <div class="detail-field">
+        <label>Priority</label>
+        <select id="detail-priority">
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+
+      <div class="detail-field">
+        <label>Reminder</label>
+        <button id="detail-reminder" class="detail-reminder-btn">Set a reminder…</button>
+      </div>
+
+      <button id="detail-current" class="current-btn">★ Set as current task</button>
+
+      <div class="detail-field">
+        <label>Notes</label>
+        <textarea id="detail-notes" placeholder="Add notes, links, sub-steps…"></textarea>
+      </div>
+
+      <div class="detail-actions">
+        <button id="detail-complete" class="wide-btn">✓ Mark complete</button>
+        <button id="detail-claude" class="wide-btn claude-btn">✦ Ask Claude for help</button>
+      </div>
+      <div id="detail-meta" class="detail-meta-info"></div>
+    </div>
+  </aside>
+
+  <!-- Archive modal -->
+  <div id="archive-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <span>Archive</span>
+        <div>
+          <button id="archive-clear" class="text-btn">Clear all</button>
+          <button id="archive-close" class="icon-btn">✕</button>
+        </div>
+      </div>
+      <div id="archive-list" class="archive-list"></div>
+    </div>
+  </div>
+
+  <!-- Projects modal -->
+  <div id="projects-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <span>📁 Projects</span>
+        <button id="projects-close" class="icon-btn">✕</button>
+      </div>
+      <div class="projects-add">
+        <input type="text" id="project-name-input" placeholder="New project name…  (e.g. C10 engine swap)" />
+        <button id="project-create" class="add-btn small">Create</button>
+      </div>
+      <div id="projects-list" class="archive-list"></div>
+    </div>
+  </div>
+
+  <!-- Recurring modal -->
+  <div id="recurring-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <span>🔁 Recurring tasks</span>
+        <button id="recurring-close" class="icon-btn">✕</button>
+      </div>
+      <div class="recurring-add">
+        <input type="text" id="recurring-title" placeholder="Task that repeats…  (e.g. Check ClickUp)" />
+        <div class="recurring-add-row">
+          <select id="recurring-priority" title="Priority">
+            <option value="high">High</option>
+            <option value="medium" selected>Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <select id="recurring-freq" title="Frequency">
+            <option value="daily">Every day</option>
+            <option value="weekdays">Weekdays</option>
+            <option value="weekly">Weekly on…</option>
+          </select>
+          <input type="time" id="recurring-time" class="rec-time" title="Optional reminder time" />
+          <button id="recurring-create" class="add-btn small">Add</button>
+        </div>
+        <div id="recurring-days" class="recurring-days hidden">
+          <label><input type="checkbox" value="1" />Mon</label>
+          <label><input type="checkbox" value="2" />Tue</label>
+          <label><input type="checkbox" value="3" />Wed</label>
+          <label><input type="checkbox" value="4" />Thu</label>
+          <label><input type="checkbox" value="5" />Fri</label>
+          <label><input type="checkbox" value="6" />Sat</label>
+          <label><input type="checkbox" value="0" />Sun</label>
+        </div>
+      </div>
+      <div id="recurring-list" class="archive-list"></div>
+    </div>
+  </div>
+
+  <!-- Standup modal -->
+  <div id="standup-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <span>📋 Daily standup</span>
+        <button id="standup-close" class="icon-btn">✕</button>
+      </div>
+      <div class="standup-body">
+        <div class="standup-section">
+          <div class="standup-q">
+            <span id="standup-y-label">What did you do yesterday?</span>
+            <button class="copy-btn" data-copy="standup-yesterday">Copy</button>
+          </div>
+          <div id="standup-y-checks" class="standup-checks"></div>
+          <textarea id="standup-yesterday" class="standup-text" rows="3"></textarea>
+        </div>
+        <div class="standup-section">
+          <div class="standup-q">
+            <span>What will you do today?</span>
+            <button class="copy-btn" data-copy="standup-today">Copy</button>
+          </div>
+          <div id="standup-t-checks" class="standup-checks"></div>
+          <textarea id="standup-today" class="standup-text" rows="3"></textarea>
+        </div>
+        <div class="standup-hint">Tick the items to include, tweak the text, hit Copy, and paste into Geekbot. Nothing is sent for you.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- High-priority persistent alert -->
+  <div id="alert-overlay" class="alert-overlay hidden">
+    <div class="alert-card">
+      <div class="alert-icon">⚠</div>
+      <div class="alert-heading">Urgent reminder</div>
+      <div id="alert-body" class="alert-body"></div>
+      <div class="alert-snooze">
+        <button class="snooze-btn" data-snooze="10">Snooze 10 min</button>
+        <button class="snooze-btn" data-snooze="60">Snooze 1 hr</button>
+      </div>
+      <button id="alert-dismiss" class="alert-dismiss">Dismiss</button>
+    </div>
+  </div>
+
+  <!-- Reminder popover -->
+  <div id="reminder-pop" class="reminder-pop hidden">
+    <div class="reminder-title">Set reminder</div>
+    <div class="reminder-presets">
+      <button data-preset="1h" class="preset">+1 hr</button>
+      <button data-preset="3h" class="preset">+3 hr</button>
+      <button data-preset="eve" class="preset">6 pm</button>
+      <button data-preset="tom9" class="preset">Tmrw 9am</button>
+    </div>
+    <input type="datetime-local" id="reminder-input" />
+    <div class="reminder-actions">
+      <button id="reminder-clear" class="text-btn">Clear</button>
+      <button id="reminder-save" class="add-btn small">Set reminder</button>
+    </div>
+  </div>
+
+  <!-- Timer phase-change window pulse -->
+  <div id="alert-pulse" class="alert-pulse"></div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="timer-ui.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

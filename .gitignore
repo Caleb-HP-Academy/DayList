@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.mcpb
+
+# personal task data — lives in the project root but must never be committed
+tasks.json
+projects.json
+config.json
+projects/
+
+*.log
+.DS_Store
