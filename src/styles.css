@@ -79,6 +79,8 @@ html, body {
 .setting-row.hidden { display: none; }
 .setting-row input[type="range"] { width: 120px; }
 .setting-hint { font-size: 10px; color: var(--text-faint); margin-top: 6px; word-break: break-all; line-height: 1.4; white-space: pre-wrap; }
+.update-link { color: var(--accent); cursor: pointer; text-decoration: underline; }
+.update-link:hover { color: var(--text); }
 .connect-btn {
   -webkit-app-region: no-drag;
   width: 100%; margin-top: 8px; padding: 8px; border-radius: 7px; cursor: pointer;

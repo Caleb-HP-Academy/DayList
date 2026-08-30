@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('daylist', {
   setHyteSettings: (patch) => ipcRenderer.invoke('set-hyte-settings', patch),
   setStandupEnabled: (on) => ipcRenderer.invoke('set-standup-enabled', on),
   setStandupIncludeWeekends: (on) => ipcRenderer.invoke('set-standup-include-weekends', on),
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
   stopFlash: () => ipcRenderer.invoke('stop-flash', STORE),
   minimize: () => ipcRenderer.send('window-minimize'),
   close: () => ipcRenderer.send('window-close'),

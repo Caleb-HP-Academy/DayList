@@ -962,6 +962,23 @@ function applySettingsToUI(s) {
   $('#set-standup-weekends').checked = includeWeekends;
   $('#set-standup-weekends-row').classList.toggle('hidden', !standupEnabled);
 }
+async function checkForUpdates() {
+  const statusEl = $('#update-status');
+  statusEl.textContent = 'Checking…';
+  const r = await daylist.checkForUpdates();
+  if (!r.ok) { statusEl.textContent = 'Could not check for updates (' + r.error + ').'; return; }
+  statusEl.innerHTML = '';
+  if (r.updateAvailable) {
+    statusEl.appendChild(document.createTextNode(`Update available: v${r.latest} (you have v${r.current}) — `));
+    const link = document.createElement('a');
+    link.className = 'update-link';
+    link.textContent = 'Download';
+    link.addEventListener('click', () => daylist.openExternal(r.url));
+    statusEl.appendChild(link);
+  } else {
+    statusEl.textContent = `You're up to date (v${r.current}).`;
+  }
+}
 async function loadHyteSettings() {
   const hs = await daylist.getHyteSettings();
   applyHyteSettingsToUI(hs);
@@ -1051,6 +1068,7 @@ function wireEvents() {
   $('#set-standup-weekends').addEventListener('change', async (e) => {
     applySettingsToUI(await daylist.setStandupIncludeWeekends(e.target.checked));
   });
+  $('#btn-check-updates').addEventListener('click', checkForUpdates);
   $('#set-standup-morning').addEventListener('change', (e) => {
     state.meta = state.meta || {};
     state.meta.standupMorning = e.target.checked;

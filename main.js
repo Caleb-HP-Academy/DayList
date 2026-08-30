@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const http = require('http');
+const https = require('https');
 
 // ---------------------------------------------------------------------------
 // Data locations
@@ -1048,6 +1049,54 @@ ipcMain.handle('delete-project', (_e, id) => {
   return true;
 });
 ipcMain.handle('open-project', (_e, id) => { openProjectWindow(id); return true; });
+
+// ---------------------------------------------------------------------------
+// Update check — reads the latest GitHub Release for the public repo.
+// No auto-download/install: just tells the user a newer version exists and
+// links to the release page, since silent auto-update isn't reliable without
+// code signing (the same unsigned-binary friction seen with AV on installs).
+// ---------------------------------------------------------------------------
+const UPDATE_REPO = 'Caleb-HP-Academy/DayList';
+function compareVersions(a, b) {
+  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+function checkForUpdates() {
+  return new Promise((resolve) => {
+    const req = https.get(
+      `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`,
+      { headers: { 'User-Agent': 'DayList-App', Accept: 'application/vnd.github+json' } },
+      (res) => {
+        let body = '';
+        res.on('data', (c) => { body += c; });
+        res.on('end', () => {
+          if (res.statusCode === 404) { resolve({ ok: false, error: 'no releases published yet' }); return; }
+          if (res.statusCode !== 200) { resolve({ ok: false, error: 'HTTP ' + res.statusCode }); return; }
+          try {
+            const data = JSON.parse(body);
+            const latest = String(data.tag_name || '').replace(/^v/i, '');
+            const current = app.getVersion();
+            if (!latest) { resolve({ ok: false, error: 'No release found' }); return; }
+            resolve({
+              ok: true, current, latest,
+              updateAvailable: compareVersions(latest, current) > 0,
+              url: data.html_url || `https://github.com/${UPDATE_REPO}/releases`
+            });
+          } catch (e) { resolve({ ok: false, error: 'Unexpected response' }); }
+        });
+      }
+    );
+    req.on('error', (e) => resolve({ ok: false, error: e.message }));
+    req.setTimeout(10000, () => { req.destroy(); resolve({ ok: false, error: 'Timed out' }); });
+  });
+}
+ipcMain.handle('check-for-updates', () => checkForUpdates());
+ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
 
 // App-level (main window only)
 ipcMain.handle('connect-claude', async () => {
