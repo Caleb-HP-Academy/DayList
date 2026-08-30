@@ -93,6 +93,7 @@ html, body {
   padding: 4px 8px; font-size: 11px; cursor: pointer;
 }
 .text-btn:hover { color: var(--text); border-color: var(--accent-dim); }
+.text-btn.hidden { display: none; }
 
 /* ---------- Day prompt ---------- */
 .day-prompt {

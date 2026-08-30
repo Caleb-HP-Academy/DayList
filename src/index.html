@@ -19,6 +19,7 @@
       </div>
       <div class="titlebar-right no-drag">
         <button id="btn-projects" class="icon-btn main-only" title="Projects">📁</button>
+        <button id="btn-recurring" class="icon-btn" title="Recurring tasks">🔁</button>
         <button id="btn-settings" class="icon-btn" title="Settings">⚙</button>
         <button id="btn-min" class="icon-btn" title="Hide to tray">—</button>
         <button id="btn-close" class="icon-btn close" title="Close window">✕</button>
@@ -63,7 +64,6 @@
       </label>
       <div class="setting-row">
         <button id="btn-archive" class="text-btn">🗄 Archive</button>
-        <button id="btn-recurring" class="text-btn">🔁 Recurring</button>
         <button id="btn-folder" class="text-btn">Data folder</button>
       </div>
       <button id="btn-connect-claude" class="connect-btn main-only">✦ Connect to Claude app</button>
@@ -264,6 +264,7 @@
           </select>
           <input type="time" id="recurring-time" class="rec-time" title="Optional reminder time" />
           <button id="recurring-create" class="add-btn small">Add</button>
+          <button id="recurring-cancel" class="text-btn hidden">Cancel</button>
         </div>
         <div id="recurring-days" class="recurring-days hidden">
           <label><input type="checkbox" value="1" />Mon</label>

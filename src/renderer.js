@@ -6,6 +6,7 @@ let saveTimer = null;
 let reminderTargetId = null;
 let selectedId = null;
 let highAlertTimer = null;
+let editingRecurringId = null;
 
 const $ = (sel) => document.querySelector(sel);
 const lists = {
@@ -763,14 +764,40 @@ function renderRecurringList() {
     wrap.appendChild(top);
     const acts = document.createElement('div');
     acts.className = 'archive-item-actions';
+    acts.appendChild(mkTextBtn('Edit', () => startEditRecurring(r)));
     acts.appendChild(mkTextBtn('Delete', () => {
       state.recurring = state.recurring.filter((x) => x.id !== r.id);
       save();
+      if (editingRecurringId === r.id) cancelEditRecurring();
       renderRecurringList();
     }));
     wrap.appendChild(acts);
     box.appendChild(wrap);
   }
+}
+function startEditRecurring(r) {
+  editingRecurringId = r.id;
+  $('#recurring-title').value = r.title;
+  $('#recurring-priority').value = r.priority;
+  $('#recurring-freq').value = r.freq;
+  $('#recurring-time').value = r.reminderTime || '';
+  $('#recurring-days').classList.toggle('hidden', r.freq !== 'weekly');
+  const dayVals = new Set((r.days || []).map(String));
+  $('#recurring-days').querySelectorAll('input').forEach((i) => { i.checked = dayVals.has(i.value); });
+  $('#recurring-create').textContent = 'Save';
+  $('#recurring-cancel').classList.remove('hidden');
+  $('#recurring-title').focus();
+}
+function cancelEditRecurring() {
+  editingRecurringId = null;
+  $('#recurring-title').value = '';
+  $('#recurring-time').value = '';
+  $('#recurring-priority').value = 'medium';
+  $('#recurring-freq').value = 'daily';
+  $('#recurring-days').classList.add('hidden');
+  $('#recurring-days').querySelectorAll('input').forEach((i) => (i.checked = false));
+  $('#recurring-create').textContent = 'Add';
+  $('#recurring-cancel').classList.add('hidden');
 }
 function dueToday(r) {
   const dow = new Date().getDay();
@@ -790,6 +817,19 @@ function createRecurring() {
     days = [...$('#recurring-days').querySelectorAll('input:checked')].map((i) => parseInt(i.value, 10));
     if (!days.length) { toast('Pick at least one weekday.'); return; }
   }
+
+  if (editingRecurringId) {
+    // Editing the template only — never touches lastAdded or spawns a task
+    // instance, so today's already-added copy (if any) is left alone.
+    const existing = state.recurring.find((x) => x.id === editingRecurringId);
+    if (existing) Object.assign(existing, { title, priority, freq, days, reminderTime });
+    save();
+    renderRecurringList();
+    cancelEditRecurring();
+    toast('Recurring task updated.');
+    return;
+  }
+
   const r = {
     id: 'r_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6),
     title, priority, notes: '', freq, days, reminderTime, lastAdded: null
@@ -975,9 +1015,10 @@ function wireEvents() {
   $('#project-name-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') createProject(); });
 
   // Recurring
-  $('#recurring-close').addEventListener('click', () => $('#recurring-modal').classList.add('hidden'));
-  $('#recurring-modal').addEventListener('mousedown', (e) => { if (e.target.id === 'recurring-modal') $('#recurring-modal').classList.add('hidden'); });
+  $('#recurring-close').addEventListener('click', () => { $('#recurring-modal').classList.add('hidden'); cancelEditRecurring(); });
+  $('#recurring-modal').addEventListener('mousedown', (e) => { if (e.target.id === 'recurring-modal') { $('#recurring-modal').classList.add('hidden'); cancelEditRecurring(); } });
   $('#recurring-create').addEventListener('click', createRecurring);
+  $('#recurring-cancel').addEventListener('click', cancelEditRecurring);
   $('#recurring-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') createRecurring(); });
   $('#recurring-freq').addEventListener('change', (e) => {
     $('#recurring-days').classList.toggle('hidden', e.target.value !== 'weekly');
