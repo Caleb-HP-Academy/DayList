@@ -76,6 +76,7 @@ html, body {
 .settings-panel { background: var(--bg-elev); border-bottom: 1px solid var(--border); padding: 8px 12px; flex: none; }
 .settings-panel.hidden { display: none; }
 .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 12px; color: var(--text-dim); }
+.setting-row.hidden { display: none; }
 .setting-row input[type="range"] { width: 120px; }
 .setting-hint { font-size: 10px; color: var(--text-faint); margin-top: 6px; word-break: break-all; line-height: 1.4; white-space: pre-wrap; }
 .connect-btn {
@@ -112,6 +113,7 @@ html, body {
 }
 .newday-btn:hover { color: var(--text); border-color: var(--accent-dim); background: var(--bg-elev2); }
 .standup-btn { border-style: solid; }
+.standup-btn.hidden { display: none; }
 
 /* ---------- Standup modal ---------- */
 .standup-body { padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
@@ -139,6 +141,10 @@ html, body {
   color: var(--text); border-radius: 6px; padding: 7px 9px; font-size: 12.5px; outline: none;
 }
 #add-input:focus { border-color: var(--accent-dim); }
+.hyte-url-input {
+  flex: 1; background: var(--bg-elev2); border: 1px solid var(--border);
+  color: var(--text-dim); border-radius: 6px; padding: 6px 8px; font-size: 11px; outline: none;
+}
 #add-priority {
   background: var(--bg-elev2); border: 1px solid var(--border); color: var(--text-dim);
   border-radius: 6px; padding: 0 4px; font-size: 11px; outline: none; cursor: pointer;
@@ -282,6 +288,17 @@ html, body {
   min-height: 90px; font-family: inherit; line-height: 1.45;
 }
 #detail-notes:focus { border-color: var(--accent-dim); }
+.detail-source {
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 8px; font-size: 11px; color: var(--text-faint);
+}
+.detail-source.hidden { display: none; }
+.detail-source summary {
+  cursor: pointer; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 600; color: var(--text-faint); outline: none;
+}
+.detail-source summary:hover { color: var(--text-dim); }
+.detail-source-text { margin-top: 6px; color: var(--text-dim); line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
 .current-btn {
   background: var(--bg-elev2); border: 1px solid var(--border); color: var(--text-dim);
   border-radius: 7px; padding: 9px; font-size: 12.5px; cursor: pointer;

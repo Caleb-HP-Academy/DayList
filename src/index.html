@@ -50,8 +50,16 @@
         <input type="checkbox" id="set-show-done" checked />
       </label>
       <label class="setting-row main-only">
+        <span>Enable Standup feature</span>
+        <input type="checkbox" id="set-standup-enabled" />
+      </label>
+      <label class="setting-row main-only" id="set-standup-morning-row">
         <span>Show standup each morning</span>
         <input type="checkbox" id="set-standup-morning" />
+      </label>
+      <label class="setting-row main-only" id="set-standup-weekends-row">
+        <span>Include weekends in standup</span>
+        <input type="checkbox" id="set-standup-weekends" />
       </label>
       <div class="setting-row">
         <button id="btn-archive" class="text-btn">🗄 Archive</button>
@@ -60,6 +68,23 @@
       </div>
       <button id="btn-connect-claude" class="connect-btn main-only">✦ Connect to Claude app</button>
       <div class="setting-hint" id="path-hint"></div>
+
+      <div class="setting-row main-only" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
+        <span>📺 Hyte widget URL</span>
+        <div style="display:flex;gap:6px;">
+          <input type="text" id="hyte-url" class="hyte-url-input" readonly />
+          <button id="btn-copy-hyte-url" class="text-btn">Copy</button>
+        </div>
+      </div>
+      <label class="setting-row main-only">
+        <span>Widget text size</span>
+        <input type="range" id="set-hyte-text-scale" min="0.6" max="3" step="0.1" />
+      </label>
+      <label class="setting-row main-only">
+        <span>Widget button size</span>
+        <input type="range" id="set-hyte-btn-scale" min="0.6" max="2" step="0.1" />
+      </label>
+      <div class="setting-hint main-only">Widget sizing updates live within a few seconds — no need to reselect it in Hyte.</div>
     </section>
 
     <!-- New-day auto prompt -->
@@ -168,6 +193,12 @@
       </div>
 
       <button id="detail-current" class="current-btn">★ Set as current task</button>
+      <button id="detail-personal" class="current-btn" title="Excludes this task from the Standup draft">🔒 Mark as personal</button>
+
+      <details id="detail-source" class="detail-source hidden">
+        <summary>Source</summary>
+        <div id="detail-source-text" class="detail-source-text"></div>
+      </details>
 
       <div class="detail-field">
         <label>Notes</label>

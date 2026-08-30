@@ -86,7 +86,7 @@
         }, 2500);
       }
       clearTimeout(alertPulseTimer);
-      alertPulseTimer = setTimeout(clearAlert, autoRepeat ? 4000 : 120000);
+      alertPulseTimer = setTimeout(clearAlert, autoRepeat ? 4000 : 30000);
     }
     function clearAlert() {
       if (pulseEl) pulseEl.className = 'alert-pulse';

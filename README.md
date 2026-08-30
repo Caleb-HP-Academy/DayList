@@ -68,6 +68,20 @@ npx @anthropic-ai/mcpb pack extension-build DayList.mcpb
 ```
 The MCP server source lives in `mcp/` (`npm install` there for local dev).
 
+## Hyte case-screen widget
+
+While DayList is running, it also serves a compact "Current Focus + top tasks" view over
+local HTTP, for embedding in something like a Hyte Y-Series panel's **iFrame** widget:
+
+```
+http://localhost:57123/
+```
+
+Tap a task's circle to mark it done — it writes straight to `tasks.json` just like the app
+itself. If port 57123 is taken, DayList tries the next few ports automatically; check the
+tray menu (**📺 Copy Hyte widget URL**) for whichever port it actually bound to. This is a
+localhost-only server (main list only, not projects) — nothing is exposed to the network.
+
 ## Claude sync (file)
 
 Everything is stored in a single file the app watches live:

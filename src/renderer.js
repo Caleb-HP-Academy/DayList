@@ -142,7 +142,7 @@ function renderTask(task, now) {
   li.dataset.id = task.id;
   li.draggable = true;
 
-  const dueSoon = task.reminder && !task.reminderFired && new Date(task.reminder).getTime() <= now;
+  const dueSoon = !task.done && task.reminder && !task.reminderFired && new Date(task.reminder).getTime() <= now;
   if (dueSoon) li.classList.add('due');
 
   const check = document.createElement('input');
@@ -327,6 +327,7 @@ function selectTask(id) {
   selectedId = id;
   const t = byId(id);
   if (!t) return;
+  $('#detail-source').open = false;
   fillDetail(t);
   $('#detail').classList.remove('closed');
   $('#detail-backdrop').classList.remove('hidden');
@@ -338,17 +339,32 @@ function closeDetail() {
   $('#detail-backdrop').classList.add('hidden');
   render();
 }
+function splitSourceLine(notes) {
+  const s = notes || '';
+  const nl = s.indexOf('\n');
+  const firstLine = nl === -1 ? s : s.slice(0, nl);
+  if (/^Source:/.test(firstLine)) {
+    return { source: firstLine, rest: nl === -1 ? '' : s.slice(nl + 1) };
+  }
+  return { source: null, rest: s };
+}
 function fillDetail(t) {
   if (!t) return;
   $('#detail-title').value = t.title;
   $('#detail-priority').value = t.priority;
-  $('#detail-notes').value = t.notes || '';
+  const { source, rest } = splitSourceLine(t.notes);
+  $('#detail-source').classList.toggle('hidden', !source);
+  $('#detail-source-text').textContent = source || '';
+  $('#detail-notes').value = rest;
   const rb = $('#detail-reminder');
   if (t.reminder) { rb.textContent = '⏰ ' + formatReminder(t.reminder) + '  (edit)'; rb.classList.add('set'); }
   else { rb.textContent = 'Set a reminder…'; rb.classList.remove('set'); }
   const cb = $('#detail-current');
   cb.classList.toggle('active', !!t.current);
   cb.textContent = t.current ? '★ Current task' : '★ Set as current task';
+  const pb = $('#detail-personal');
+  pb.classList.toggle('active', !!t.personal);
+  pb.textContent = t.personal ? '🔒 Personal (hidden from standup)' : '🔒 Mark as personal';
   $('#detail-complete').textContent = t.done ? '↺ Reopen task' : '✓ Mark complete';
   const parts = [];
   if (t.createdAt) parts.push('Created ' + new Date(t.createdAt).toLocaleString());
@@ -364,6 +380,13 @@ function setCurrent(id) {
   if (makeCurrent) { t.done = false; t.completedAt = null; }
   save();
   render();
+  fillDetail(t);
+}
+function togglePersonal(id) {
+  const t = byId(id);
+  if (!t) return;
+  t.personal = !t.personal;
+  save();
   fillDetail(t);
 }
 
@@ -520,11 +543,23 @@ function restoreArchived(id) {
 // ---------------------------------------------------------------------------
 function buildStandup() {
   const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const prevDay = (d, skipWeekends) => {
+    const x = new Date(d);
+    x.setDate(x.getDate() - 1);
+    if (skipWeekends) while (x.getDay() === 0 || x.getDay() === 6) x.setDate(x.getDate() - 1);
+    return x;
+  };
   const todayStart = startOfDay(new Date());
-  const yStart = new Date(todayStart); yStart.setDate(yStart.getDate() - 1);
+  // With weekends excluded, "yesterday" on a Monday resolves to Friday —
+  // the weekend is treated as if it doesn't exist for standup purposes.
+  const yStart = prevDay(todayStart, standupSkipWeekends);
 
   // completed = done tasks still in the list + everything in the archive
-  const completed = [...state.tasks.filter((t) => t.done), ...(state.archive || [])]
+  // (excluding anything marked personal, which never appears in the standup)
+  const completed = [
+    ...state.tasks.filter((t) => t.done && !t.personal),
+    ...(state.archive || []).filter((t) => !t.personal)
+  ]
     .map((t) => ({ title: t.title, when: t.completedAt || t.archivedAt }))
     .filter((x) => x.when)
     .map((x) => ({ title: x.title, when: new Date(x.when) }))
@@ -550,7 +585,7 @@ function buildStandup() {
   }
 
   const rank = { high: 0, medium: 1, low: 2 };
-  const active = state.tasks.filter((t) => !t.done).slice();
+  const active = state.tasks.filter((t) => !t.done && !t.personal).slice();
   active.sort((a, b) => (b.current ? 1 : 0) - (a.current ? 1 : 0) || rank[a.priority] - rank[b.priority]);
   const today = active.map((t) => t.title);
 
@@ -605,6 +640,7 @@ function refreshStandupText(containerSel, textId) {
 }
 
 function maybeShowStandup() {
+  if (!standupEnabled) return;
   if (state.meta && state.meta.standupMorning && state.meta.lastStandup !== todayStr()) {
     openStandup();
     state.meta.lastStandup = todayStr();
@@ -822,6 +858,7 @@ function playHighOnce() {
 }
 
 let alertTaskId = null;
+let highAlertAutoOffTimer = null;
 function handleReminderFired(payload) {
   const priority = payload.priority || 'medium';
   if (priority === 'low') playLow();
@@ -837,12 +874,16 @@ function showHighAlert(id, title) {
   $('#alert-body').textContent = title;
   $('#alert-overlay').classList.remove('hidden');
   clearInterval(highAlertTimer);
-  highAlertTimer = setInterval(playHighOnce, 1400); // keeps sounding until dismissed
+  highAlertTimer = setInterval(playHighOnce, 1400); // keeps sounding until dismissed or 30s pass
+  clearTimeout(highAlertAutoOffTimer);
+  highAlertAutoOffTimer = setTimeout(dismissHighAlert, 30000);
 }
 function dismissHighAlert() {
   $('#alert-overlay').classList.add('hidden');
   clearInterval(highAlertTimer);
   highAlertTimer = null;
+  clearTimeout(highAlertAutoOffTimer);
+  highAlertAutoOffTimer = null;
   alertTaskId = null;
   daylist.stopFlash();
 }
@@ -861,14 +902,34 @@ function snoozeAlert(minutes) {
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
+let standupEnabled = true;
+let standupSkipWeekends = false;
 async function loadSettings() {
   applySettingsToUI(await daylist.getSettings());
   $('#path-hint').textContent = 'Data file (share this with Claude):\n' + (await daylist.getTasksPath());
+  if (CTX.mode === 'main') await loadHyteSettings();
 }
 function applySettingsToUI(s) {
   $('#set-aot').checked = !!s.alwaysOnTop;
   $('#set-startup').checked = !!s.runOnStartup;
   $('#set-opacity').value = s.opacity || 1;
+  standupEnabled = s.showStandup !== false;
+  $('#set-standup-enabled').checked = standupEnabled;
+  $('#btn-standup').classList.toggle('hidden', !standupEnabled);
+  $('#set-standup-morning-row').classList.toggle('hidden', !standupEnabled);
+  const includeWeekends = s.standupIncludeWeekends !== false;
+  standupSkipWeekends = !includeWeekends;
+  $('#set-standup-weekends').checked = includeWeekends;
+  $('#set-standup-weekends-row').classList.toggle('hidden', !standupEnabled);
+}
+async function loadHyteSettings() {
+  const hs = await daylist.getHyteSettings();
+  applyHyteSettingsToUI(hs);
+}
+function applyHyteSettingsToUI(hs) {
+  $('#hyte-url').value = hs.url || 'Starting…';
+  $('#set-hyte-text-scale').value = hs.textScale || 1;
+  $('#set-hyte-btn-scale').value = hs.buttonScale || 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -890,9 +951,13 @@ function wireEvents() {
   $('#add-btn').addEventListener('click', addTask);
   $('#add-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTask(); });
 
-  $('#btn-settings').addEventListener('click', () => $('#settings-panel').classList.toggle('hidden'));
-  $('#btn-min').addEventListener('click', () => daylist.minimize());
-  $('#btn-close').addEventListener('click', () => daylist.close());
+  $('#btn-settings').addEventListener('click', () => {
+    const opening = $('#settings-panel').classList.contains('hidden');
+    $('#settings-panel').classList.toggle('hidden');
+    if (opening && CTX.mode === 'main') loadHyteSettings();
+  });
+  $('#btn-min').addEventListener('click', () => { $('#settings-panel').classList.add('hidden'); daylist.minimize(); });
+  $('#btn-close').addEventListener('click', () => { $('#settings-panel').classList.add('hidden'); daylist.close(); });
 
   $('#set-aot').addEventListener('change', (e) => daylist.setAlwaysOnTop(e.target.checked));
   $('#set-startup').addEventListener('change', (e) => daylist.setStartup(e.target.checked));
@@ -926,9 +991,25 @@ function wireEvents() {
     const r = await daylist.connectClaude();
     if (r && r.msg) toast(r.msg);
   });
+  $('#btn-copy-hyte-url').addEventListener('click', async () => {
+    const url = $('#hyte-url').value;
+    if (url && url !== 'Starting…') { await daylist.copyText(url); toast('Widget URL copied.'); }
+  });
+  $('#set-hyte-text-scale').addEventListener('input', async (e) => {
+    applyHyteSettingsToUI(await daylist.setHyteSettings({ textScale: parseFloat(e.target.value) }));
+  });
+  $('#set-hyte-btn-scale').addEventListener('input', async (e) => {
+    applyHyteSettingsToUI(await daylist.setHyteSettings({ buttonScale: parseFloat(e.target.value) }));
+  });
 
   $('#btn-newday-main').addEventListener('click', () => startNewDay(false));
   $('#btn-standup').addEventListener('click', openStandup);
+  $('#set-standup-enabled').addEventListener('change', async (e) => {
+    applySettingsToUI(await daylist.setStandupEnabled(e.target.checked));
+  });
+  $('#set-standup-weekends').addEventListener('change', async (e) => {
+    applySettingsToUI(await daylist.setStandupIncludeWeekends(e.target.checked));
+  });
   $('#set-standup-morning').addEventListener('change', (e) => {
     state.meta = state.meta || {};
     state.meta.standupMorning = e.target.checked;
@@ -956,9 +1037,16 @@ function wireEvents() {
   $('#detail-delete').addEventListener('click', () => { if (selectedId) deleteTask(selectedId); });
   $('#detail-title').addEventListener('input', (e) => { const t = byId(selectedId); if (t) { t.title = e.target.value; save(); render(); } });
   $('#detail-priority').addEventListener('change', (e) => { const t = byId(selectedId); if (t) { t.priority = e.target.value; save(); render(); } });
-  $('#detail-notes').addEventListener('input', (e) => { const t = byId(selectedId); if (t) { t.notes = e.target.value; save(); } });
+  $('#detail-notes').addEventListener('input', (e) => {
+    const t = byId(selectedId);
+    if (!t) return;
+    const source = $('#detail-source').classList.contains('hidden') ? null : $('#detail-source-text').textContent;
+    t.notes = source ? source + '\n' + e.target.value : e.target.value;
+    save();
+  });
   $('#detail-reminder').addEventListener('click', (e) => { if (selectedId) openReminder(selectedId, e.currentTarget); });
   $('#detail-current').addEventListener('click', () => { if (selectedId) setCurrent(selectedId); });
+  $('#detail-personal').addEventListener('click', () => { if (selectedId) togglePersonal(selectedId); });
   $('#detail-complete').addEventListener('click', () => { const t = byId(selectedId); if (t) toggleDone(t.id, !t.done); });
   $('#detail-claude').addEventListener('click', () => { if (selectedId) askClaude(selectedId); });
 

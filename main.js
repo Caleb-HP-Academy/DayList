@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, Notification, nativeImage, shel
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const http = require('http');
 
 // ---------------------------------------------------------------------------
 // Data locations
@@ -22,6 +23,12 @@ const stores = new Map();
 let tray = null;
 let reminderTimer = null;
 let isQuitting = false;
+
+// Local HTTP server that serves a compact read/complete widget view of the
+// main list, for embedding via URL in things like a Hyte case screen iFrame.
+const HYTE_DEFAULT_PORT = 57123;
+let hyteServer = null;
+let hytePort = null;
 
 const mainWin = () => (stores.get('main') ? stores.get('main').window : null);
 
@@ -75,6 +82,7 @@ function normalizeTask(t) {
     reminder: t.reminder || null,
     reminderFired: !!t.reminderFired,
     notes: typeof t.notes === 'string' ? t.notes : '',
+    personal: !!t.personal,
     createdAt: t.createdAt || new Date().toISOString(),
     completedAt: t.completedAt || null,
     archivedAt: t.archivedAt || null
@@ -349,6 +357,12 @@ function rebuildTrayMenu() {
       click: (item) => setStartup(item.checked)
     },
     { type: 'separator' },
+    {
+      label: hytePort ? `📺 Copy Hyte widget URL (:${hytePort})` : '📺 Hyte widget starting…',
+      enabled: !!hytePort,
+      click: () => { clipboard.writeText(`http://localhost:${hytePort}/`); }
+    },
+    { type: 'separator' },
     { label: 'Open data folder', click: () => shell.showItemInFolder(TASKS_FILE) },
     { label: 'Quit DayList', click: () => { isQuitting = true; app.quit(); } }
   ]);
@@ -393,7 +407,22 @@ function setStartup(on) {
 }
 function publicSettings(storeId) {
   const c = storeConfig(storeId);
-  return { alwaysOnTop: c.alwaysOnTop, opacity: c.opacity, runOnStartup: getStartupEnabled() };
+  const cfg = readConfig();
+  return {
+    alwaysOnTop: c.alwaysOnTop, opacity: c.opacity, runOnStartup: getStartupEnabled(),
+    showStandup: cfg.showStandup !== false,
+    standupIncludeWeekends: cfg.standupIncludeWeekends !== false
+  };
+}
+function setStandupEnabled(on) {
+  const cfg = readConfig(); cfg.showStandup = !!on; writeConfig(cfg);
+  const w = mainWin();
+  if (w) w.webContents.send('settings-updated', publicSettings('main'));
+}
+function setStandupIncludeWeekends(on) {
+  const cfg = readConfig(); cfg.standupIncludeWeekends = !!on; writeConfig(cfg);
+  const w = mainWin();
+  if (w) w.webContents.send('settings-updated', publicSettings('main'));
 }
 
 // ---------------------------------------------------------------------------
@@ -480,6 +509,307 @@ function fireReminder(storeId, task) {
     }
     w.webContents.send('reminder-fired', { id: task.id, title: task.title, priority });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Hyte widget — small local HTTP server (main list only, localhost-only)
+// ---------------------------------------------------------------------------
+function hyteState() {
+  const data = readData('main');
+  const active = data.tasks.filter((t) => !t.done);
+  const current = active.find((t) => t.current) || null;
+  const order = { high: 0, medium: 1, low: 2 };
+  const rest = active
+    .filter((t) => !current || t.id !== current.id)
+    .slice()
+    .sort((a, b) => order[a.priority] - order[b.priority]);
+  const hyte = getHyteSettings();
+  return {
+    current: current ? { id: current.id, title: current.title } : null,
+    tasks: rest.slice(0, 8).map((t) => ({ id: t.id, title: t.title, priority: t.priority })),
+    textScale: hyte.textScale,
+    buttonScale: hyte.buttonScale
+  };
+}
+function getHyteSettings() {
+  const cfg = readConfig();
+  return {
+    url: hytePort ? `http://localhost:${hytePort}/` : null,
+    textScale: typeof cfg.hyteTextScale === 'number' ? cfg.hyteTextScale : 1,
+    buttonScale: typeof cfg.hyteButtonScale === 'number' ? cfg.hyteButtonScale : 1
+  };
+}
+function setHyteSettings(patch) {
+  const cfg = readConfig();
+  if (patch && typeof patch.textScale === 'number') cfg.hyteTextScale = Math.max(0.6, Math.min(3, patch.textScale));
+  if (patch && typeof patch.buttonScale === 'number') cfg.hyteButtonScale = Math.max(0.6, Math.min(2, patch.buttonScale));
+  writeConfig(cfg);
+  return getHyteSettings();
+}
+function completeMainTaskById(id) {
+  const data = readData('main');
+  const t = data.tasks.find((x) => x.id === id);
+  if (!t) return false;
+  t.done = true;
+  t.completedAt = new Date().toISOString();
+  t.current = false;
+  writeData('main', data);
+  const w = winOf('main');
+  if (w) w.webContents.send('tasks-updated', readData('main'));
+  checkReminders();
+  return true;
+}
+function hyteHtmlPage() {
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DayList</title>
+<style>
+  :root{
+    --bg-elev:rgba(35,36,40,.55);--bg-elev2:rgba(43,44,49,.55);--border:rgba(255,255,255,.16);
+    --text:#f2f3f5;--text-dim:#c2c3c8;--text-faint:#9a9ba1;
+    --high:#ff5c5c;--medium:#ffb020;--low:#4fc98a;--current:#35d07f;
+    --text-scale:1;--btn-scale:1;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:transparent;color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden;}
+  body{display:flex;flex-direction:column;padding:clamp(6px,2vw,12px);gap:clamp(8px,2vw,12px);touch-action:manipulation;}
+  .hdr{font-size:calc(clamp(12px,3.8vw,16px) * var(--text-scale));letter-spacing:1.5px;text-transform:uppercase;color:var(--text-faint);font-weight:700;flex:none;text-shadow:0 1px 3px rgba(0,0,0,.6);}
+  .reconn{color:var(--medium);}
+  .reconn.hidden{display:none;}
+  .focus-card{
+    flex:none;background:linear-gradient(135deg,var(--bg-elev),var(--bg-elev2));
+    border:1px solid var(--current);border-radius:14px;padding:clamp(12px,4vw,20px);
+    display:flex;align-items:center;gap:clamp(10px,3vw,16px);transition:opacity .2s ease,background .1s ease;
+    box-shadow:0 2px 10px rgba(0,0,0,.35);cursor:pointer;touch-action:manipulation;
+  }
+  .focus-card.empty{border-color:var(--border);opacity:.7;cursor:default;}
+  .focus-card.completing{opacity:0;}
+  .focus-card:active{background:linear-gradient(135deg,var(--bg-elev2),var(--bg-elev2));}
+  .check{
+    flex:none;width:calc(clamp(48px,16vw,72px) * var(--btn-scale));height:calc(clamp(48px,16vw,72px) * var(--btn-scale));border-radius:50%;
+    border:calc(5px * var(--btn-scale)) solid var(--current);pointer-events:none;
+  }
+  .check.high{border-color:var(--high);} .check.medium{border-color:var(--medium);} .check.low{border-color:var(--low);}
+  .focus-label{font-size:calc(clamp(12px,3.5vw,15px) * var(--text-scale));color:var(--current);text-transform:uppercase;letter-spacing:1px;font-weight:700;}
+  .focus-title{font-size:calc(clamp(22px,8vw,34px) * var(--text-scale));font-weight:600;line-height:1.3;overflow-wrap:anywhere;text-shadow:0 1px 3px rgba(0,0,0,.6);}
+  .empty-msg{font-size:calc(clamp(16px,4.5vw,20px) * var(--text-scale));color:var(--text-dim);font-style:italic;}
+  .list{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:clamp(8px,2vw,12px);}
+  .row{
+    display:flex;align-items:center;gap:clamp(10px,3vw,16px);
+    background:var(--bg-elev);border:1px solid var(--border);border-radius:12px;
+    padding:clamp(12px,4vw,18px);transition:opacity .2s ease,background .1s ease;box-shadow:0 1px 6px rgba(0,0,0,.3);
+    cursor:pointer;touch-action:manipulation;min-height:calc(clamp(56px,17vw,80px) * var(--btn-scale));
+  }
+  .row:active{background:var(--bg-elev2);}
+  .row.completing{opacity:0;}
+  .row .title{flex:1;font-size:calc(clamp(18px,7vw,28px) * var(--text-scale));line-height:1.35;overflow-wrap:anywhere;text-shadow:0 1px 3px rgba(0,0,0,.6);}
+  .list::-webkit-scrollbar{width:4px;}
+  .list::-webkit-scrollbar-thumb{background:var(--bg-elev2);border-radius:3px;}
+  .all-done{flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:calc(clamp(18px,5vw,22px) * var(--text-scale));text-align:center;}
+</style>
+</head>
+<body>
+  <div class="hdr">DayList <span id="reconn" class="reconn hidden">— reconnecting…</span></div>
+  <div id="focus"></div>
+  <div id="list" class="list"></div>
+  <script>
+  function el(tag, cls){ var e=document.createElement(tag); if(cls) e.className=cls; return e; }
+  function complete(id, cardEl){
+    if(cardEl.dataset.busy) return;
+    cardEl.dataset.busy = '1';
+    cardEl.classList.add('completing');
+    function revert(){ cardEl.classList.remove('completing'); delete cardEl.dataset.busy; }
+    fetch('/api/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})})
+      .then(function(r){ return r.json().catch(function(){ return {ok:false}; }); })
+      .then(function(res){ if(!res || !res.ok) revert(); load(); })
+      .catch(function(){ revert(); load(); });
+  }
+  // The whole card/row is the tap target (not just the small circle) — much
+  // more forgiving on a touchscreen. Bind both click and touchend defensively,
+  // since some embedded webviews are inconsistent about synthesizing click
+  // from a touch, and guard against a click firing right after a touchend.
+  function bindTap(elm, handler){
+    var lastTouch = 0;
+    elm.addEventListener('touchend', function(e){ lastTouch = Date.now(); handler(); }, {passive:true});
+    elm.addEventListener('click', function(){ if(Date.now() - lastTouch < 700) return; handler(); });
+  }
+  // Skip rebuilding the DOM when nothing actually changed, so a poll tick
+  // landing mid-tap can't yank the element out from under an in-progress touch.
+  var lastRenderKey = null;
+  function render(d){
+    var key = JSON.stringify(d);
+    if(key === lastRenderKey) return;
+    lastRenderKey = key;
+    var focusWrap = document.getElementById('focus');
+    focusWrap.innerHTML = '';
+    if(d.current){
+      var card = el('div','focus-card');
+      var chk = el('div','check');
+      var text = el('div');
+      var lbl = el('div','focus-label'); lbl.textContent = 'Current Focus';
+      var title = el('div','focus-title'); title.textContent = d.current.title;
+      text.appendChild(lbl); text.appendChild(title);
+      card.appendChild(chk); card.appendChild(text);
+      bindTap(card, function(){ complete(d.current.id, card); });
+      focusWrap.appendChild(card);
+    } else {
+      var card2 = el('div','focus-card empty');
+      var msg = el('div','empty-msg'); msg.textContent = 'No current focus set';
+      card2.appendChild(msg);
+      focusWrap.appendChild(card2);
+    }
+    var list = document.getElementById('list');
+    list.innerHTML = '';
+    if(!d.tasks.length && !d.current){
+      var done = el('div','all-done'); done.textContent = 'All caught up';
+      list.appendChild(done);
+      return;
+    }
+    d.tasks.forEach(function(t){
+      var row = el('div','row');
+      var chk = el('div','check ' + t.priority);
+      var title = el('div','title'); title.textContent = t.title;
+      row.appendChild(chk); row.appendChild(title);
+      bindTap(row, function(){ complete(t.id, row); });
+      list.appendChild(row);
+    });
+  }
+  // If DayList itself gets closed and reopened, this page's fetches start
+  // failing until the server comes back — track how long that's been going
+  // on so the panel shows it's disconnected instead of silently freezing on
+  // stale data, and force a full reload after a sustained outage in case the
+  // connection got stuck in a bad state rather than just "server not up yet".
+  var consecutiveFails = 0;
+  function load(){
+    fetch('/api/state').then(function(r){ return r.json(); }).then(function(d){
+      consecutiveFails = 0;
+      document.getElementById('reconn').classList.add('hidden');
+      var root = document.documentElement.style;
+      root.setProperty('--text-scale', d.textScale || 1);
+      root.setProperty('--btn-scale', d.buttonScale || 1);
+      render(d);
+    }).catch(function(){
+      consecutiveFails++;
+      if(consecutiveFails >= 2) document.getElementById('reconn').classList.remove('hidden');
+      if(consecutiveFails >= 10) location.reload();
+    });
+  }
+  load();
+  setInterval(load, 3000);
+  </script>
+</body>
+</html>`;
+}
+// Standalone diagnostic page — point the Hyte iFrame widget at /tap-test
+// temporarily to check whether the panel forwards touch input into iframe
+// content AT ALL, independent of anything DayList's own widget does.
+function hyteTapTestPage() {
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tap test</title>
+<style>
+  html,body{height:100%;margin:0;background:#111;color:#fff;font-family:system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;touch-action:manipulation;}
+  #btn{width:80vw;height:40vh;max-width:400px;background:#35d07f;color:#111;font-size:8vw;font-weight:800;
+    border-radius:20px;display:flex;align-items:center;justify-content:center;text-align:center;user-select:none;cursor:pointer;}
+  #btn.hit{background:#ff5c5c;}
+  #log{font-size:4vw;text-align:center;color:#9a9ba1;}
+</style>
+</head>
+<body>
+  <div id="btn">TAP ME<br>0</div>
+  <div id="log">waiting for first tap…</div>
+  <script>
+  var n = 0;
+  var btn = document.getElementById('btn');
+  var log = document.getElementById('log');
+  function hit(kind){
+    n++;
+    btn.innerHTML = 'TAP ME<br>' + n;
+    btn.classList.add('hit');
+    setTimeout(function(){ btn.classList.remove('hit'); }, 150);
+    log.textContent = 'last event: ' + kind + ' (' + new Date().toLocaleTimeString() + ')';
+  }
+  btn.addEventListener('touchend', function(e){ hit('touchend'); }, {passive:true});
+  btn.addEventListener('click', function(){ hit('click'); });
+  </script>
+</body>
+</html>`;
+}
+function startHyteServer() {
+  const cfg = readConfig();
+  const desiredPort = cfg.hyteWidgetPort || HYTE_DEFAULT_PORT;
+  const server = http.createServer((req, res) => {
+    // Permissive CORS: the embedding app (e.g. Hyte Nexus) does a cross-origin
+    // HEAD preflight against this URL to decide whether it's safe to iframe —
+    // without this header that fetch() throws and gets treated as "blocked".
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (req.method === 'OPTIONS') {
+      // CORS preflight — needed for the JSON POST from /api/complete when the
+      // iframe's browsing context has an opaque origin (e.g. sandboxed without
+      // allow-same-origin), which makes even a same-URL fetch look cross-origin.
+      res.writeHead(204, {
+        'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Max-Age': '86400'
+      });
+      res.end();
+      return;
+    }
+    const url = (req.url || '/').split('?')[0];
+    const isRoot = url === '/' || url === '/index.html';
+    if ((req.method === 'GET' || req.method === 'HEAD') && url === '/tap-test') {
+      const html = hyteTapTestPage();
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(html) });
+      res.end(req.method === 'HEAD' ? undefined : html);
+    } else if ((req.method === 'GET' || req.method === 'HEAD') && isRoot) {
+      const html = hyteHtmlPage();
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(html) });
+      res.end(req.method === 'HEAD' ? undefined : html);
+    } else if ((req.method === 'GET' || req.method === 'HEAD') && url === '/api/state') {
+      const json = JSON.stringify(hyteState());
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(json) });
+      res.end(req.method === 'HEAD' ? undefined : json);
+    } else if (req.method === 'POST' && url === '/api/complete') {
+      let body = '';
+      req.on('data', (c) => { body += c; if (body.length > 10000) req.destroy(); });
+      req.on('end', () => {
+        let id;
+        try { id = JSON.parse(body || '{}').id; } catch (e) {}
+        const done = id ? completeMainTaskById(id) : false;
+        res.writeHead(done ? 200 : 400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: done }));
+      });
+    } else {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not found');
+    }
+  });
+
+  const tryListen = (port, attemptsLeft) => {
+    server.once('error', (e) => {
+      if (e.code === 'EADDRINUSE' && attemptsLeft > 0) tryListen(port + 1, attemptsLeft - 1);
+      else console.error('[daylist] Hyte widget server failed to start:', e.message);
+    });
+    server.listen(port, '127.0.0.1', () => {
+      hytePort = port;
+      console.log('[daylist] Hyte widget available at http://localhost:' + port + '/');
+      // Remember the port we actually landed on, so a future restart prefers
+      // it over the default — keeps the widget URL stable across relaunches
+      // instead of drifting if this run had to bump past a transient conflict.
+      const c = readConfig();
+      if (c.hyteWidgetPort !== port) { c.hyteWidgetPort = port; writeConfig(c); }
+      rebuildTrayMenu();
+    });
+  };
+  tryListen(desiredPort, 5);
+  hyteServer = server;
 }
 
 // ---------------------------------------------------------------------------
@@ -681,6 +1011,10 @@ ipcMain.handle('get-tasks-path', (_e, storeId) => storeFile(storeId || 'main'));
 ipcMain.handle('open-data-folder', (_e, storeId) => { shell.showItemInFolder(storeFile(storeId || 'main')); });
 ipcMain.handle('stop-flash', (_e, storeId) => { const w = winOf(storeId || 'main'); if (w) { try { w.flashFrame(false); } catch (e) {} } });
 ipcMain.handle('copy-text', (_e, text) => { try { clipboard.writeText(String(text || '')); return true; } catch (e) { return false; } });
+ipcMain.handle('get-hyte-settings', () => getHyteSettings());
+ipcMain.handle('set-hyte-settings', (_e, patch) => setHyteSettings(patch || {}));
+ipcMain.handle('set-standup-enabled', (_e, on) => { setStandupEnabled(!!on); return publicSettings('main'); });
+ipcMain.handle('set-standup-include-weekends', (_e, on) => { setStandupIncludeWeekends(!!on); return publicSettings('main'); });
 
 // Projects
 ipcMain.handle('list-projects', () => projectsWithCounts());
@@ -779,6 +1113,7 @@ if (!gotLock) {
 
     createWindow('main', 'DayList', 'main');
     createTray();
+    startHyteServer();
 
     timer = defaultTimer();
     startTimerTick();
@@ -799,6 +1134,7 @@ if (!gotLock) {
     isQuitting = true;
     if (reminderTimer) clearInterval(reminderTimer);
     if (timerTick) clearInterval(timerTick);
+    if (hyteServer) { try { hyteServer.close(); } catch (e) {} }
     for (const s of stores.values()) if (s.watcher) { try { s.watcher.close(); } catch (e) {} }
   });
 }

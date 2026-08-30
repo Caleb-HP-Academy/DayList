@@ -58,6 +58,7 @@ function normalizeTask(t) {
     reminder: t.reminder || null,
     reminderFired: !!t.reminderFired,
     notes: typeof t.notes === 'string' ? t.notes : '',
+    personal: !!t.personal,
     createdAt: t.createdAt || new Date().toISOString(),
     completedAt: t.completedAt || null,
     archivedAt: t.archivedAt || null
