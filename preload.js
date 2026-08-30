@@ -41,7 +41,8 @@ contextBridge.exposeInMainWorld('daylist', {
   renameProject: (id, name) => ipcRenderer.invoke('rename-project', id, name),
   deleteProject: (id) => ipcRenderer.invoke('delete-project', id),
   openProject: (id) => ipcRenderer.invoke('open-project', id),
-  moveTaskToMain: (taskId) => ipcRenderer.invoke('move-task-to-main', STORE, taskId),
+  moveTaskToMain: (taskId) => ipcRenderer.invoke('move-task-to-store', STORE, taskId, 'main'),
+  moveTaskToProject: (taskId, projectId) => ipcRenderer.invoke('move-task-to-store', STORE, taskId, projectId),
 
   // Work/rest timer
   timerGet: () => ipcRenderer.invoke('timer-get'),

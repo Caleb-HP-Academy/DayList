@@ -12,6 +12,7 @@
   --medium: #ffb020;
   --low: #4fc98a;
   --current: #35d07f;
+  --done: #4fc98a; /* fixed — not part of priority customization, unlike --low */
   --danger: #ff5c5c;
   --radius: 8px;
 }
@@ -69,7 +70,7 @@ html, body {
 /* ---------- Progress ---------- */
 .progress-wrap { display: flex; align-items: center; gap: 8px; padding: 8px 12px 4px; flex: none; }
 .progress-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--bg-elev2); overflow: hidden; }
-.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--low)); transition: width 0.25s ease; }
+.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--done)); transition: width 0.25s ease; }
 .progress-text { font-size: 11px; color: var(--text-dim); min-width: 42px; text-align: right; }
 
 /* ---------- Settings ---------- */
@@ -130,7 +131,7 @@ html, body {
   padding: 4px 12px; font-size: 11px; cursor: pointer; font-weight: 600;
 }
 .copy-btn:hover { background: #6f9bff; }
-.copy-btn.copied { background: var(--low); }
+.copy-btn.copied { background: var(--done); }
 .standup-text {
   width: 100%; background: var(--bg-elev2); border: 1px solid var(--border); color: var(--text);
   border-radius: 6px; padding: 8px; font-size: 12.5px; outline: none; resize: vertical;
@@ -237,7 +238,7 @@ html, body {
   width: 16px; height: 16px; flex: none;
   border: 1.5px solid var(--text-faint); border-radius: 5px; cursor: pointer; position: relative;
 }
-.task-check:checked { background: var(--low); border-color: var(--low); }
+.task-check:checked { background: var(--done); border-color: var(--done); }
 .task-check:checked::after { content: '✓'; color: #14231b; font-size: 11px; font-weight: 800; position: absolute; top: -1px; left: 2px; }
 
 .task-body { flex: 1; min-width: 0; }

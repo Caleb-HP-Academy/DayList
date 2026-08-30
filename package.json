@@ -1,6 +1,6 @@
 {
   "name": "daylist",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "A compact always-on-top daily todo widget with reminders and Claude sync",
   "main": "main.js",
   "author": {

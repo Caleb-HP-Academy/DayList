@@ -51,6 +51,8 @@ async function init() {
   });
   daylist.onSettingsUpdated((s) => applySettingsToUI(s));
   daylist.onReminderFired((payload) => handleReminderFired(payload));
+  ac(); // pre-warm the AudioContext — the very first sound after creating one
+  // can otherwise get silently clipped before the audio pipeline is live.
   daylist.onPriorityPrefsUpdated((prefs) => {
     priorityPrefs = prefs;
     applyPriorityColors(prefs);
@@ -286,6 +288,45 @@ async function moveToMain(id) {
   toast('Moved to your main list.');
 }
 
+async function openMoveProjectPanel() {
+  const panel = $('#move-project-panel');
+  const opening = panel.classList.contains('hidden');
+  if (!opening) { panel.classList.add('hidden'); return; }
+  const sel = $('#move-project-select');
+  const projects = await daylist.listProjects();
+  sel.innerHTML = '<option value="">Choose a project…</option>';
+  projects.forEach((p) => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+  const newOpt = document.createElement('option');
+  newOpt.value = '__new__'; newOpt.textContent = '+ Create new project…';
+  sel.appendChild(newOpt);
+  $('#move-project-new-name').classList.add('hidden');
+  $('#move-project-new-name').value = '';
+  panel.classList.remove('hidden');
+}
+async function moveToProject(id) {
+  const sel = $('#move-project-select');
+  const val = sel.value;
+  if (!val) { toast('Choose a project first.'); return; }
+  let targetId = val;
+  if (val === '__new__') {
+    const name = $('#move-project-new-name').value.trim();
+    if (!name) { toast('Enter a project name.'); return; }
+    const proj = await daylist.createProject(name);
+    targetId = proj.id;
+  }
+  const ok = await daylist.moveTaskToProject(id, targetId);
+  if (!ok) { toast('Could not move task.'); return; }
+  state.tasks = state.tasks.filter((t) => t.id !== id);
+  if (selectedId === id) closeDetail();
+  render();
+  $('#move-project-panel').classList.add('hidden');
+  toast('Moved to project.');
+}
+
 // ---------------------------------------------------------------------------
 // Drag & drop
 // ---------------------------------------------------------------------------
@@ -347,6 +388,7 @@ function selectTask(id) {
   const t = byId(id);
   if (!t) return;
   $('#detail-source').open = false;
+  $('#move-project-panel').classList.add('hidden');
   fillDetail(t);
   $('#detail').classList.remove('closed');
   $('#detail-backdrop').classList.remove('hidden');
@@ -1193,6 +1235,11 @@ function wireEvents() {
   $('#detail-current').addEventListener('click', () => { if (selectedId) setCurrent(selectedId); });
   $('#detail-personal').addEventListener('click', () => { if (selectedId) togglePersonal(selectedId); });
   $('#detail-move-main').addEventListener('click', () => { if (selectedId) moveToMain(selectedId); });
+  $('#detail-move-project').addEventListener('click', (e) => { e.stopPropagation(); openMoveProjectPanel(); });
+  $('#move-project-select').addEventListener('change', (e) => {
+    $('#move-project-new-name').classList.toggle('hidden', e.target.value !== '__new__');
+  });
+  $('#move-project-go').addEventListener('click', () => { if (selectedId) moveToProject(selectedId); });
   $('#detail-complete').addEventListener('click', () => { const t = byId(selectedId); if (t) toggleDone(t.id, !t.done); });
   $('#detail-claude').addEventListener('click', () => { if (selectedId) askClaude(selectedId); });
 
@@ -1253,6 +1300,14 @@ function wireEvents() {
   });
   document.querySelectorAll('.prio-sound-test').forEach((btn) => {
     btn.addEventListener('click', () => playPrioritySound(btn.dataset.priority));
+  });
+  // Close any open priority-settings panel on an outside click. The gear
+  // button's own handler stops propagation, so this only ever sees clicks
+  // that aren't the click that just opened a panel.
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.prio-settings:not(.hidden)').forEach((panel) => {
+      if (!panel.contains(e.target)) panel.classList.add('hidden');
+    });
   });
 }
 

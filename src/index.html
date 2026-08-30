@@ -232,6 +232,12 @@
       <button id="detail-current" class="current-btn">★ Set as current task</button>
       <button id="detail-personal" class="current-btn" title="Excludes this task from the Standup draft">🔒 Mark as personal</button>
       <button id="detail-move-main" class="current-btn project-only" title="Moves this task out of this project and onto your main DayList">↩ Move to main list</button>
+      <button id="detail-move-project" class="current-btn main-only" title="Moves this task into one of your projects">➡ Move to project</button>
+      <div id="move-project-panel" class="prio-settings hidden">
+        <select id="move-project-select"></select>
+        <input type="text" id="move-project-new-name" class="hyte-url-input hidden" placeholder="New project name…" style="flex:1;" />
+        <button id="move-project-go" class="text-btn">Go</button>
+      </div>
 
       <details id="detail-source" class="detail-source hidden">
         <summary>Source</summary>

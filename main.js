@@ -1089,22 +1089,25 @@ ipcMain.handle('delete-project', (_e, id) => {
   return true;
 });
 ipcMain.handle('open-project', (_e, id) => { openProjectWindow(id); return true; });
-ipcMain.handle('move-task-to-main', (_e, storeId, taskId) => {
-  if (!storeId || storeId === 'main') return false;
-  const src = readData(storeId);
+// Generic: move a task from one store to another (main <-> project, or
+// project <-> project). Used both by the project window's "Move to main
+// list" and the main window's "Move to project".
+ipcMain.handle('move-task-to-store', (_e, fromStoreId, taskId, toStoreId) => {
+  if (!fromStoreId || !toStoreId || fromStoreId === toStoreId) return false;
+  const src = readData(fromStoreId);
   const idx = src.tasks.findIndex((t) => t.id === taskId);
   if (idx === -1) return false;
   const [task] = src.tasks.splice(idx, 1);
-  writeData(storeId, src);
-  const main = readData('main');
+  writeData(fromStoreId, src);
+  const dest = readData(toStoreId);
   // Clear 'current' — that flag is meant to be unique per store, and blindly
-  // carrying it over could silently create a second "current" task on main.
-  main.tasks.push(normalizeTask({ ...task, current: false }));
-  writeData('main', main);
-  const projWin = winOf(storeId);
-  if (projWin) projWin.webContents.send('tasks-updated', readData(storeId));
-  const mw = mainWin();
-  if (mw) mw.webContents.send('tasks-updated', readData('main'));
+  // carrying it over could silently create a second "current" task there.
+  dest.tasks.push(normalizeTask({ ...task, current: false }));
+  writeData(toStoreId, dest);
+  const srcWin = winOf(fromStoreId);
+  if (srcWin) srcWin.webContents.send('tasks-updated', readData(fromStoreId));
+  const destWin = winOf(toStoreId);
+  if (destWin) destWin.webContents.send('tasks-updated', readData(toStoreId));
   checkReminders();
   return true;
 });
