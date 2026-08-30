@@ -108,6 +108,8 @@ html, body {
 
 /* ---------- Toolbar ---------- */
 .toolbar { padding: 8px 12px 0; flex: none; display: flex; gap: 6px; }
+.footer-bar { padding: 6px 12px; flex: none; display: flex; justify-content: center; border-top: 1px solid var(--border); }
+.footer-bar .text-btn { width: 100%; text-align: center; }
 .newday-btn {
   -webkit-app-region: no-drag;
   flex: 1; padding: 7px; border-radius: 7px; cursor: pointer;
@@ -172,6 +174,24 @@ html, body {
 .caret { font-size: 9px; transition: transform 0.15s; display: inline-block; margin-right: -2px; }
 .prio-group.collapsed .caret { transform: rotate(-90deg); }
 .prio-group.collapsed .task-list { display: none; }
+.prio-group.collapsed .prio-settings { display: none; }
+.prio-settings-btn {
+  margin-left: auto; width: 16px; height: 16px; border: none; background: transparent;
+  color: var(--text-faint); border-radius: 4px; cursor: pointer; font-size: 10px;
+  line-height: 1; display: grid; place-items: center; text-transform: none; letter-spacing: normal;
+}
+.prio-settings-btn:hover { color: var(--text); background: var(--bg-elev2); }
+.prio-settings {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 8px; margin: 0 4px 6px; font-size: 11px; color: var(--text-dim);
+}
+.prio-settings.hidden { display: none; }
+.prio-settings label { display: flex; align-items: center; gap: 4px; }
+.prio-settings select {
+  background: var(--bg-elev2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 5px; padding: 3px 5px; font-size: 11px; outline: none; cursor: pointer;
+}
 .done-header > span:first-child { display: flex; align-items: center; gap: 6px; }
 
 /* Current-task focus: dim everything except the current task */
@@ -385,6 +405,9 @@ html, body {
 
 /* ---------- Project mode (hide main-only controls) ---------- */
 body.project-mode .main-only { display: none !important; }
+/* ---------- Main mode (hide project-only controls) ---------- */
+.project-only { display: none; }
+body.project-mode .project-only { display: inline-block; }
 
 /* ---------- Standup checkboxes ---------- */
 .standup-checks { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; max-height: 130px; overflow-y: auto; }
@@ -430,6 +453,14 @@ body.project-mode .main-only { display: none !important; }
   background: var(--bg-elev2); border: 1px solid var(--border); border-radius: 8px;
 }
 .focus-group.collapsed .timer { display: none; }
+.timer-header {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--text-faint); font-weight: 600; padding: 0 0 6px;
+}
+.timer-header:hover { color: var(--text-dim); }
+.timer.collapsed .caret { transform: rotate(-90deg); }
+.timer.collapsed .timer-body { display: none; }
 .timer-task { font-size: 10.5px; color: var(--text-faint); text-align: center; min-height: 13px; margin-bottom: 2px; }
 .timer-display { display: flex; flex-direction: column; align-items: center; gap: 1px; margin-bottom: 8px; }
 .timer-phase { font-size: 10px; letter-spacing: 1.5px; color: var(--accent); font-weight: 700; }

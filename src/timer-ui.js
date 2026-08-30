@@ -131,6 +131,18 @@
     } else {
       if (aotRow) aotRow.classList.add('hidden');
     }
+
+    // Collapse toggle — inline panel only (a popout window can just be closed
+    // instead). Purely a per-machine UI preference, so localStorage is enough.
+    const header = q('.timer-header');
+    if (header && !opts.isPopout) {
+      const COLLAPSE_KEY = 'daylist-timer-collapsed';
+      try { if (localStorage.getItem(COLLAPSE_KEY) === '1') root.classList.add('collapsed'); } catch (e) {}
+      header.addEventListener('click', () => {
+        root.classList.toggle('collapsed');
+        try { localStorage.setItem(COLLAPSE_KEY, root.classList.contains('collapsed') ? '1' : '0'); } catch (e) {}
+      });
+    }
   }
 
   window.initTimerUI = initTimerUI;

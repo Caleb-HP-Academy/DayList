@@ -25,8 +25,12 @@ contextBridge.exposeInMainWorld('daylist', {
   setHyteSettings: (patch) => ipcRenderer.invoke('set-hyte-settings', patch),
   setStandupEnabled: (on) => ipcRenderer.invoke('set-standup-enabled', on),
   setStandupIncludeWeekends: (on) => ipcRenderer.invoke('set-standup-include-weekends', on),
+  getPriorityPrefs: () => ipcRenderer.invoke('get-priority-prefs'),
+  setPriorityPrefs: (priority, patch) => ipcRenderer.invoke('set-priority-prefs', priority, patch),
+  onPriorityPrefsUpdated: (cb) => ipcRenderer.on('priority-prefs-updated', (_e, prefs) => cb(prefs)),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  sendSuggestion: () => ipcRenderer.invoke('send-suggestion'),
   stopFlash: () => ipcRenderer.invoke('stop-flash', STORE),
   minimize: () => ipcRenderer.send('window-minimize'),
   close: () => ipcRenderer.send('window-close'),
@@ -37,6 +41,7 @@ contextBridge.exposeInMainWorld('daylist', {
   renameProject: (id, name) => ipcRenderer.invoke('rename-project', id, name),
   deleteProject: (id) => ipcRenderer.invoke('delete-project', id),
   openProject: (id) => ipcRenderer.invoke('open-project', id),
+  moveTaskToMain: (taskId) => ipcRenderer.invoke('move-task-to-main', STORE, taskId),
 
   // Work/rest timer
   timerGet: () => ipcRenderer.invoke('timer-get'),

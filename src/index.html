@@ -124,40 +124,67 @@
         <div class="group-header focus-header"><span class="caret">▾</span>★ Current Focus</div>
         <ul class="task-list focus-list" data-priority="focus"></ul>
         <div class="timer" id="timer-panel">
-          <div class="timer-display">
-            <span class="timer-phase">WORK</span>
-            <span class="timer-time">60:00</span>
-          </div>
-          <div class="timer-controls">
-            <button data-tcmd="toggle" class="timer-btn primary">Start</button>
-            <button data-tcmd="reset" class="timer-btn" title="Reset phase">Reset</button>
-            <button data-tcmd="skip" class="timer-btn" title="Skip to next phase">Skip</button>
-            <button data-tcmd="cancel" class="timer-btn" title="Cancel timer">Cancel</button>
-          </div>
-          <div class="timer-foot">
-            <button data-tcmd="popout" class="timer-mini">⧉ Pop out</button>
-            <button data-tcmd="settings" class="timer-mini">⚙ Timer settings</button>
-          </div>
-          <div class="timer-settings hidden">
-            <label class="ts-row">Work <input type="number" class="ts-work" min="1" max="300" /> min</label>
-            <label class="ts-row">Rest <input type="number" class="ts-rest" min="1" max="180" /> min</label>
-            <label class="ts-check"><input type="checkbox" class="ts-repeat" /> Auto-repeat cycles (work→rest→…)</label>
-            <label class="ts-check"><input type="checkbox" class="ts-sound" /> Chime sound</label>
-            <label class="ts-check ts-aot-row hidden"><input type="checkbox" class="ts-aot" /> Always on top</label>
+          <div class="timer-header" id="timer-collapse-toggle"><span class="caret">▾</span>⏱ Timer</div>
+          <div class="timer-body">
+            <div class="timer-display">
+              <span class="timer-phase">WORK</span>
+              <span class="timer-time">60:00</span>
+            </div>
+            <div class="timer-controls">
+              <button data-tcmd="toggle" class="timer-btn primary">Start</button>
+              <button data-tcmd="reset" class="timer-btn" title="Reset phase">Reset</button>
+              <button data-tcmd="skip" class="timer-btn" title="Skip to next phase">Skip</button>
+              <button data-tcmd="cancel" class="timer-btn" title="Cancel timer">Cancel</button>
+            </div>
+            <div class="timer-foot">
+              <button data-tcmd="popout" class="timer-mini">⧉ Pop out</button>
+              <button data-tcmd="settings" class="timer-mini">⚙ Timer settings</button>
+            </div>
+            <div class="timer-settings hidden">
+              <label class="ts-row">Work <input type="number" class="ts-work" min="1" max="300" /> min</label>
+              <label class="ts-row">Rest <input type="number" class="ts-rest" min="1" max="180" /> min</label>
+              <label class="ts-check"><input type="checkbox" class="ts-repeat" /> Auto-repeat cycles (work→rest→…)</label>
+              <label class="ts-check"><input type="checkbox" class="ts-sound" /> Chime sound</label>
+              <label class="ts-check ts-aot-row hidden"><input type="checkbox" class="ts-aot" /> Always on top</label>
+            </div>
           </div>
         </div>
       </section>
 
       <section class="prio-group" data-priority="high">
-        <div class="group-header"><span class="caret">▾</span><span class="dot dot-high"></span>High priority</div>
+        <div class="group-header">
+          <span class="caret">▾</span><span class="dot dot-high"></span>High priority
+          <button class="prio-settings-btn icon-btn" data-priority="high" title="Color &amp; sound">⚙</button>
+        </div>
+        <div class="prio-settings hidden" data-priority="high">
+          <label>Color <select id="prio-color-high" class="prio-color" data-priority="high"></select></label>
+          <label>Sound <select id="prio-sound-high" class="prio-sound" data-priority="high"></select></label>
+          <button class="prio-sound-test text-btn" data-priority="high">🔊 Test</button>
+        </div>
         <ul class="task-list" data-priority="high"></ul>
       </section>
       <section class="prio-group" data-priority="medium">
-        <div class="group-header"><span class="caret">▾</span><span class="dot dot-medium"></span>Medium priority</div>
+        <div class="group-header">
+          <span class="caret">▾</span><span class="dot dot-medium"></span>Medium priority
+          <button class="prio-settings-btn icon-btn" data-priority="medium" title="Color &amp; sound">⚙</button>
+        </div>
+        <div class="prio-settings hidden" data-priority="medium">
+          <label>Color <select id="prio-color-medium" class="prio-color" data-priority="medium"></select></label>
+          <label>Sound <select id="prio-sound-medium" class="prio-sound" data-priority="medium"></select></label>
+          <button class="prio-sound-test text-btn" data-priority="medium">🔊 Test</button>
+        </div>
         <ul class="task-list" data-priority="medium"></ul>
       </section>
       <section class="prio-group" data-priority="low">
-        <div class="group-header"><span class="caret">▾</span><span class="dot dot-low"></span>Low priority</div>
+        <div class="group-header">
+          <span class="caret">▾</span><span class="dot dot-low"></span>Low priority
+          <button class="prio-settings-btn icon-btn" data-priority="low" title="Color &amp; sound">⚙</button>
+        </div>
+        <div class="prio-settings hidden" data-priority="low">
+          <label>Color <select id="prio-color-low" class="prio-color" data-priority="low"></select></label>
+          <label>Sound <select id="prio-sound-low" class="prio-sound" data-priority="low"></select></label>
+          <button class="prio-sound-test text-btn" data-priority="low">🔊 Test</button>
+        </div>
         <ul class="task-list" data-priority="low"></ul>
       </section>
 
@@ -168,6 +195,11 @@
         <ul class="task-list done-list" data-priority="done"></ul>
       </section>
     </main>
+
+    <!-- Feedback -->
+    <div class="footer-bar no-drag">
+      <button id="btn-suggest" class="text-btn">💡 Suggest a feature</button>
+    </div>
   </div>
 
   <!-- Backdrop: click anywhere outside the sidebar to close it -->
@@ -199,6 +231,7 @@
 
       <button id="detail-current" class="current-btn">★ Set as current task</button>
       <button id="detail-personal" class="current-btn" title="Excludes this task from the Standup draft">🔒 Mark as personal</button>
+      <button id="detail-move-main" class="current-btn project-only" title="Moves this task out of this project and onto your main DayList">↩ Move to main list</button>
 
       <details id="detail-source" class="detail-source hidden">
         <summary>Source</summary>

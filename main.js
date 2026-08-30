@@ -427,6 +427,37 @@ function setStandupIncludeWeekends(on) {
 }
 
 // ---------------------------------------------------------------------------
+// Per-priority color + notification sound preferences — global (not per
+// store), so every window (main + all projects) and the Hyte widget agree.
+// ---------------------------------------------------------------------------
+const DEFAULT_PRIORITY_PREFS = {
+  high: { color: '#ff5c5c', sound: 'alert' },
+  medium: { color: '#ffb020', sound: 'chime' },
+  low: { color: '#4fc98a', sound: 'soft' }
+};
+function getPriorityPrefs() {
+  const cfg = readConfig();
+  const saved = cfg.priorityPrefs || {};
+  const out = {};
+  for (const p of ['high', 'medium', 'low']) {
+    out[p] = { ...DEFAULT_PRIORITY_PREFS[p], ...(saved[p] || {}) };
+  }
+  return out;
+}
+function setPriorityPrefs(priority, patch) {
+  if (!['high', 'medium', 'low'].includes(priority)) return getPriorityPrefs();
+  const cfg = readConfig();
+  cfg.priorityPrefs = cfg.priorityPrefs || {};
+  cfg.priorityPrefs[priority] = { ...DEFAULT_PRIORITY_PREFS[priority], ...(cfg.priorityPrefs[priority] || {}), ...patch };
+  writeConfig(cfg);
+  const prefs = getPriorityPrefs();
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('priority-prefs-updated', prefs);
+  }
+  return prefs;
+}
+
+// ---------------------------------------------------------------------------
 // File watching per store
 // ---------------------------------------------------------------------------
 function startWatching(storeId) {
@@ -525,11 +556,13 @@ function hyteState() {
     .slice()
     .sort((a, b) => order[a.priority] - order[b.priority]);
   const hyte = getHyteSettings();
+  const colors = getPriorityPrefs();
   return {
     current: current ? { id: current.id, title: current.title } : null,
     tasks: rest.slice(0, 8).map((t) => ({ id: t.id, title: t.title, priority: t.priority })),
     textScale: hyte.textScale,
-    buttonScale: hyte.buttonScale
+    buttonScale: hyte.buttonScale,
+    colors: { high: colors.high.color, medium: colors.medium.color, low: colors.low.color }
   };
 }
 function getHyteSettings() {
@@ -691,6 +724,11 @@ function hyteHtmlPage() {
       var root = document.documentElement.style;
       root.setProperty('--text-scale', d.textScale || 1);
       root.setProperty('--btn-scale', d.buttonScale || 1);
+      if(d.colors){
+        if(d.colors.high) root.setProperty('--high', d.colors.high);
+        if(d.colors.medium) root.setProperty('--medium', d.colors.medium);
+        if(d.colors.low) root.setProperty('--low', d.colors.low);
+      }
       render(d);
     }).catch(function(){
       consecutiveFails++;
@@ -1016,6 +1054,8 @@ ipcMain.handle('get-hyte-settings', () => getHyteSettings());
 ipcMain.handle('set-hyte-settings', (_e, patch) => setHyteSettings(patch || {}));
 ipcMain.handle('set-standup-enabled', (_e, on) => { setStandupEnabled(!!on); return publicSettings('main'); });
 ipcMain.handle('set-standup-include-weekends', (_e, on) => { setStandupIncludeWeekends(!!on); return publicSettings('main'); });
+ipcMain.handle('get-priority-prefs', () => getPriorityPrefs());
+ipcMain.handle('set-priority-prefs', (_e, priority, patch) => setPriorityPrefs(priority, patch || {}));
 
 // Projects
 ipcMain.handle('list-projects', () => projectsWithCounts());
@@ -1049,6 +1089,25 @@ ipcMain.handle('delete-project', (_e, id) => {
   return true;
 });
 ipcMain.handle('open-project', (_e, id) => { openProjectWindow(id); return true; });
+ipcMain.handle('move-task-to-main', (_e, storeId, taskId) => {
+  if (!storeId || storeId === 'main') return false;
+  const src = readData(storeId);
+  const idx = src.tasks.findIndex((t) => t.id === taskId);
+  if (idx === -1) return false;
+  const [task] = src.tasks.splice(idx, 1);
+  writeData(storeId, src);
+  const main = readData('main');
+  // Clear 'current' — that flag is meant to be unique per store, and blindly
+  // carrying it over could silently create a second "current" task on main.
+  main.tasks.push(normalizeTask({ ...task, current: false }));
+  writeData('main', main);
+  const projWin = winOf(storeId);
+  if (projWin) projWin.webContents.send('tasks-updated', readData(storeId));
+  const mw = mainWin();
+  if (mw) mw.webContents.send('tasks-updated', readData('main'));
+  checkReminders();
+  return true;
+});
 
 // ---------------------------------------------------------------------------
 // Update check — reads the latest GitHub Release for the public repo.
@@ -1097,6 +1156,20 @@ function checkForUpdates() {
 }
 ipcMain.handle('check-for-updates', () => checkForUpdates());
 ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
+const SUGGESTION_EMAIL = 'caleb@hpacademy.com';
+ipcMain.handle('send-suggestion', async () => {
+  const subject = encodeURIComponent('DayList suggestion');
+  const body = encodeURIComponent(`What would you like to see changed or added?\n\n\n\n— sent from DayList v${app.getVersion()}`);
+  try {
+    // Rejects when Windows has no working handler for mailto: (e.g. a stale
+    // "default mail app" registration pointing at something uninstalled) —
+    // confirmed this is a real, silent failure mode, not just theoretical.
+    await shell.openExternal(`mailto:${SUGGESTION_EMAIL}?subject=${subject}&body=${body}`);
+    return { ok: true, email: SUGGESTION_EMAIL };
+  } catch (e) {
+    return { ok: false, email: SUGGESTION_EMAIL };
+  }
+});
 
 // App-level (main window only)
 ipcMain.handle('connect-claude', async () => {

@@ -35,6 +35,8 @@ async function init() {
   render();
   updateDateLabel();
   await loadSettings();
+  populatePriorityDropdowns();
+  await loadPriorityPrefs();
   wireEvents();
   maybePromptNewDay();
   $('#set-standup-morning').checked = !!(state.meta && state.meta.standupMorning);
@@ -49,6 +51,11 @@ async function init() {
   });
   daylist.onSettingsUpdated((s) => applySettingsToUI(s));
   daylist.onReminderFired((payload) => handleReminderFired(payload));
+  daylist.onPriorityPrefsUpdated((prefs) => {
+    priorityPrefs = prefs;
+    applyPriorityColors(prefs);
+    syncPriorityDropdowns(prefs);
+  });
 
   if (window.initTimerUI) window.initTimerUI(document.getElementById('timer-panel'), { isPopout: false });
 
@@ -266,6 +273,17 @@ function deleteTask(id) {
   if (selectedId === id) closeDetail();
   save();
   render();
+}
+
+async function moveToMain(id) {
+  // Persisted directly by the main process (both stores), not via save() —
+  // calling save() here too would just re-send a redundant/stale write.
+  const ok = await daylist.moveTaskToMain(id);
+  if (!ok) { toast('Could not move task.'); return; }
+  state.tasks = state.tasks.filter((t) => t.id !== id);
+  if (selectedId === id) closeDetail();
+  render();
+  toast('Moved to your main list.');
 }
 
 // ---------------------------------------------------------------------------
@@ -642,6 +660,10 @@ function refreshStandupText(containerSel, textId) {
 
 function maybeShowStandup() {
   if (!standupEnabled) return;
+  if (standupSkipWeekends) {
+    const dow = new Date().getDay();
+    if (dow === 0 || dow === 6) return; // weekends excluded — no auto-popup
+  }
   if (state.meta && state.meta.standupMorning && state.meta.lastStandup !== todayStr()) {
     openStandup();
     state.meta.lastStandup = todayStr();
@@ -896,25 +918,81 @@ function playHighOnce() {
   beep(1000, 130, 'square', 0.16, 0.2);
   beep(1320, 220, 'square', 0.18, 0.42);
 }
+function playPing() { beep(1400, 90, 'sine', 0.14, 0); }
+
+// Selectable per-priority notification sounds, reusing the existing beeps
+// (silent|1) is deliberately first so it reads as "off" at the top of the list.
+const SOUND_OPTIONS = {
+  silent: { label: 'Silent', play: () => {} },
+  soft: { label: 'Soft', play: playLow },
+  ping: { label: 'Ping', play: playPing },
+  chime: { label: 'Chime', play: playMedium },
+  alert: { label: 'Alert', play: playHighOnce }
+};
+const COLOR_OPTIONS = [
+  { label: 'Red', value: '#ff5c5c' },
+  { label: 'Orange', value: '#ffb020' },
+  { label: 'Yellow', value: '#f5d90a' },
+  { label: 'Green', value: '#4fc98a' },
+  { label: 'Teal', value: '#2dd4bf' },
+  { label: 'Blue', value: '#5b8cff' },
+  { label: 'Purple', value: '#a78bfa' },
+  { label: 'Pink', value: '#f472b6' },
+  { label: 'Gray', value: '#9a9ba1' }
+];
+let priorityPrefs = null; // filled by loadPriorityPrefs()
+function playPrioritySound(priority) {
+  const key = priorityPrefs && priorityPrefs[priority] && priorityPrefs[priority].sound;
+  (SOUND_OPTIONS[key] || SOUND_OPTIONS.soft).play();
+}
+function applyPriorityColors(prefs) {
+  const root = document.documentElement.style;
+  ['high', 'medium', 'low'].forEach((p) => {
+    if (prefs[p] && prefs[p].color) root.setProperty('--' + p, prefs[p].color);
+  });
+}
+function syncPriorityDropdowns(prefs) {
+  ['high', 'medium', 'low'].forEach((p) => {
+    const colorSel = $(`#prio-color-${p}`), soundSel = $(`#prio-sound-${p}`);
+    if (colorSel) colorSel.value = prefs[p].color;
+    if (soundSel) soundSel.value = prefs[p].sound;
+  });
+}
+function populatePriorityDropdowns() {
+  ['high', 'medium', 'low'].forEach((p) => {
+    const colorSel = $(`#prio-color-${p}`);
+    COLOR_OPTIONS.forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.value; opt.textContent = c.label;
+      colorSel.appendChild(opt);
+    });
+    const soundSel = $(`#prio-sound-${p}`);
+    Object.keys(SOUND_OPTIONS).forEach((key) => {
+      const opt = document.createElement('option');
+      opt.value = key; opt.textContent = SOUND_OPTIONS[key].label;
+      soundSel.appendChild(opt);
+    });
+  });
+}
+async function loadPriorityPrefs() {
+  priorityPrefs = await daylist.getPriorityPrefs();
+  applyPriorityColors(priorityPrefs);
+  syncPriorityDropdowns(priorityPrefs);
+}
 
 let alertTaskId = null;
 let highAlertAutoOffTimer = null;
 function handleReminderFired(payload) {
   const priority = payload.priority || 'medium';
-  if (priority === 'low') playLow();
-  else if (priority === 'medium') playMedium();
-  else {
-    // high: urgent, repeating, and a persistent alert
-    playHighOnce();
-    showHighAlert(payload.id, payload.title);
-  }
+  playPrioritySound(priority);
+  if (priority === 'high') showHighAlert(payload.id, payload.title); // urgent, repeating, persistent alert
 }
 function showHighAlert(id, title) {
   alertTaskId = id;
   $('#alert-body').textContent = title;
   $('#alert-overlay').classList.remove('hidden');
   clearInterval(highAlertTimer);
-  highAlertTimer = setInterval(playHighOnce, 1400); // keeps sounding until dismissed or 30s pass
+  highAlertTimer = setInterval(() => playPrioritySound('high'), 1400); // keeps sounding until dismissed or 30s pass
   clearTimeout(highAlertAutoOffTimer);
   highAlertAutoOffTimer = setTimeout(dismissHighAlert, 30000);
 }
@@ -1069,6 +1147,14 @@ function wireEvents() {
     applySettingsToUI(await daylist.setStandupIncludeWeekends(e.target.checked));
   });
   $('#btn-check-updates').addEventListener('click', checkForUpdates);
+  $('#btn-suggest').addEventListener('click', async () => {
+    const r = await daylist.sendSuggestion();
+    if (r.ok) toast('Opening your email app…');
+    else {
+      await daylist.copyText(r.email);
+      toast(`No email app found — copied ${r.email} to your clipboard.`);
+    }
+  });
   $('#set-standup-morning').addEventListener('change', (e) => {
     state.meta = state.meta || {};
     state.meta.standupMorning = e.target.checked;
@@ -1106,6 +1192,7 @@ function wireEvents() {
   $('#detail-reminder').addEventListener('click', (e) => { if (selectedId) openReminder(selectedId, e.currentTarget); });
   $('#detail-current').addEventListener('click', () => { if (selectedId) setCurrent(selectedId); });
   $('#detail-personal').addEventListener('click', () => { if (selectedId) togglePersonal(selectedId); });
+  $('#detail-move-main').addEventListener('click', () => { if (selectedId) moveToMain(selectedId); });
   $('#detail-complete').addEventListener('click', () => { const t = byId(selectedId); if (t) toggleDone(t.id, !t.done); });
   $('#detail-claude').addEventListener('click', () => { if (selectedId) askClaude(selectedId); });
 
@@ -1140,6 +1227,32 @@ function wireEvents() {
       const sec = h.closest('.prio-group');
       if (sec) toggleCollapse(sec.dataset.priority);
     });
+  });
+
+  // Per-priority color/sound settings
+  document.querySelectorAll('.prio-settings-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // don't also trigger the section's own collapse
+      const panel = document.querySelector(`.prio-settings[data-priority="${btn.dataset.priority}"]`);
+      if (panel) panel.classList.toggle('hidden');
+    });
+  });
+  document.querySelectorAll('.prio-color').forEach((sel) => {
+    sel.addEventListener('change', async (e) => {
+      const p = sel.dataset.priority;
+      applyPriorityColors({ [p]: { color: e.target.value } });
+      priorityPrefs = await daylist.setPriorityPrefs(p, { color: e.target.value });
+    });
+  });
+  document.querySelectorAll('.prio-sound').forEach((sel) => {
+    sel.addEventListener('change', async (e) => {
+      const p = sel.dataset.priority;
+      priorityPrefs = await daylist.setPriorityPrefs(p, { sound: e.target.value });
+      playPrioritySound(p);
+    });
+  });
+  document.querySelectorAll('.prio-sound-test').forEach((btn) => {
+    btn.addEventListener('click', () => playPrioritySound(btn.dataset.priority));
   });
 }
 
