@@ -83,6 +83,7 @@ function normalizeTask(t) {
     reminder: t.reminder || null,
     reminderFired: !!t.reminderFired,
     notes: typeof t.notes === 'string' ? t.notes : '',
+    claudeNotes: typeof t.claudeNotes === 'string' ? t.claudeNotes : '',
     personal: !!t.personal,
     createdAt: t.createdAt || new Date().toISOString(),
     completedAt: t.completedAt || null,
@@ -242,6 +243,36 @@ function projectsWithCounts() {
 // ---------------------------------------------------------------------------
 // Windows
 // ---------------------------------------------------------------------------
+// Right-click context menu: spelling suggestions (when over a misspelled
+// word) plus standard cut/copy/paste, for any editable field in a window.
+function attachSpellcheckMenu(win) {
+  win.webContents.on('context-menu', (_e, params) => {
+    const template = [];
+    if (params.isEditable) {
+      if (params.misspelledWord) {
+        if (params.dictionarySuggestions.length) {
+          for (const s of params.dictionarySuggestions) {
+            template.push({ label: s, click: () => win.webContents.replaceMisspelling(s) });
+          }
+        } else {
+          template.push({ label: 'No spelling suggestions', enabled: false });
+        }
+        template.push({ type: 'separator' });
+        template.push({
+          label: 'Add to dictionary',
+          click: () => win.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
+        });
+        template.push({ type: 'separator' });
+      }
+      template.push({ label: 'Cut', role: 'cut', enabled: params.editFlags.canCut });
+      template.push({ label: 'Copy', role: 'copy', enabled: params.editFlags.canCopy });
+      template.push({ label: 'Paste', role: 'paste', enabled: params.editFlags.canPaste });
+    } else if (params.selectionText) {
+      template.push({ label: 'Copy', role: 'copy' });
+    }
+    if (template.length) Menu.buildFromTemplate(template).popup({ window: win });
+  });
+}
 function createWindow(storeId, name, mode) {
   const cfg = storeConfig(storeId);
   const win = new BrowserWindow({
@@ -271,6 +302,7 @@ function createWindow(storeId, name, mode) {
   });
 
   stores.set(storeId, { window: win, watcher: null, ignoreUntil: 0 });
+  attachSpellcheckMenu(win);
 
   win.setOpacity(cfg.opacity);
   if (cfg.alwaysOnTop) win.setAlwaysOnTop(true, 'screen-saver');
@@ -1205,9 +1237,11 @@ ipcMain.handle('connect-claude', async () => {
 ipcMain.handle('ask-claude', (_e, payload) => {
   const title = (payload && payload.title) || '';
   const notes = (payload && payload.notes) || '';
+  const claudeNotes = (payload && payload.claudeNotes) || '';
   const prompt =
     `I'm working on this task from my DayList to-do app and need help.\n\n` +
     `Task: ${title}\n` + (notes ? `My notes: ${notes}\n` : '') +
+    (claudeNotes ? `Notes for Claude: ${claudeNotes}\n` : '') +
     `\nPlease help me figure out how to get this done.`;
   try { clipboard.writeText(prompt); } catch (e) {}
   shell.openExternal('https://claude.ai/new?q=' + encodeURIComponent(prompt));

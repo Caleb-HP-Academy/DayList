@@ -417,6 +417,7 @@ function fillDetail(t) {
   $('#detail-source').classList.toggle('hidden', !source);
   $('#detail-source-text').textContent = source || '';
   $('#detail-notes').value = rest;
+  $('#detail-claude-notes').value = t.claudeNotes || '';
   const rb = $('#detail-reminder');
   if (t.reminder) { rb.textContent = '⏰ ' + formatReminder(t.reminder) + '  (edit)'; rb.classList.add('set'); }
   else { rb.textContent = 'Set a reminder…'; rb.classList.remove('set'); }
@@ -927,7 +928,7 @@ function createRecurring() {
 async function askClaude(id) {
   const t = byId(id);
   if (!t) return;
-  await daylist.askClaude({ title: t.title, notes: t.notes || '' });
+  await daylist.askClaude({ title: t.title, notes: t.notes || '', claudeNotes: t.claudeNotes || '' });
   toast('Opening Claude — prompt also copied to clipboard (Ctrl+V).');
 }
 
@@ -1230,6 +1231,10 @@ function wireEvents() {
     const source = $('#detail-source').classList.contains('hidden') ? null : $('#detail-source-text').textContent;
     t.notes = source ? source + '\n' + e.target.value : e.target.value;
     save();
+  });
+  $('#detail-claude-notes').addEventListener('input', (e) => {
+    const t = byId(selectedId);
+    if (t) { t.claudeNotes = e.target.value; save(); }
   });
   $('#detail-reminder').addEventListener('click', (e) => { if (selectedId) openReminder(selectedId, e.currentTarget); });
   $('#detail-current').addEventListener('click', () => { if (selectedId) setCurrent(selectedId); });

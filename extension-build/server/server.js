@@ -58,6 +58,8 @@ function normalizeTask(t) {
     reminder: t.reminder || null,
     reminderFired: !!t.reminderFired,
     notes: typeof t.notes === 'string' ? t.notes : '',
+    claudeNotes: typeof t.claudeNotes === 'string' ? t.claudeNotes : '',
+    personal: !!t.personal,
     createdAt: t.createdAt || new Date().toISOString(),
     completedAt: t.completedAt || null,
     archivedAt: t.archivedAt || null
@@ -158,7 +160,10 @@ function summarize(t) {
   if (t.current) flags.push('★current');
   if (t.done) flags.push('done');
   if (t.reminder) flags.push('⏰ ' + new Date(t.reminder).toLocaleString());
-  return `• [${t.priority}] ${t.title}${flags.length ? '  (' + flags.join(', ') + ')' : ''}  {id:${t.id}}`;
+  let line = `• [${t.priority}] ${t.title}${flags.length ? '  (' + flags.join(', ') + ')' : ''}  {id:${t.id}}`;
+  if (t.notes) line += `\n    notes: ${t.notes}`;
+  if (t.claudeNotes) line += `\n    notes for Claude: ${t.claudeNotes}`;
+  return line;
 }
 const ok = (text) => ({ content: [{ type: 'text', text }] });
 const findTask = (d, q) =>
@@ -208,17 +213,18 @@ server.tool(
     priority: z.enum(['high', 'medium', 'low']).optional(),
     reminder: z.string().optional().describe('When to remind, e.g. "2026-08-27 17:00" or ISO datetime'),
     notes: z.string().optional(),
+    claudeNotes: z.string().optional().describe('A note just for Claude — shown separately from the user\'s own notes'),
     current: z.boolean().optional().describe('Make it the current focus task'),
     project: PROJECT_ARG
   },
-  async ({ title, priority = 'medium', reminder, notes, current, project }) => {
+  async ({ title, priority = 'medium', reminder, notes, claudeNotes, current, project }) => {
     let store;
     try { store = resolveStore(project); } catch (e) { return ok(e.message); }
     let d;
     try { d = loadForWrite(store.file); } catch (e) { return ok(e.message); }
     if (current) d.tasks.forEach((t) => (t.current = false));
     const task = normalizeTask({
-      id: newId('t_'), title, priority, notes: notes || '',
+      id: newId('t_'), title, priority, notes: notes || '', claudeNotes: claudeNotes || '',
       reminder: parseWhen(reminder), current: !!current, createdAt: new Date().toISOString()
     });
     d.tasks.push(task);
@@ -236,10 +242,11 @@ server.tool(
     priority: z.enum(['high', 'medium', 'low']).optional(),
     reminder: z.string().optional().describe('New reminder time, or "none" to clear'),
     notes: z.string().optional(),
+    claudeNotes: z.string().optional().describe('A note just for Claude — shown separately from the user\'s own notes'),
     done: z.boolean().optional(),
     project: PROJECT_ARG
   },
-  async ({ task, title, priority, reminder, notes, done, project }) => {
+  async ({ task, title, priority, reminder, notes, claudeNotes, done, project }) => {
     let store;
     try { store = resolveStore(project); } catch (e) { return ok(e.message); }
     let d;
@@ -249,6 +256,7 @@ server.tool(
     if (title !== undefined) t.title = title;
     if (priority !== undefined) t.priority = priority;
     if (notes !== undefined) t.notes = notes;
+    if (claudeNotes !== undefined) t.claudeNotes = claudeNotes;
     if (done !== undefined) { t.done = done; t.completedAt = done ? new Date().toISOString() : null; if (done) t.current = false; }
     if (reminder !== undefined) {
       if (reminder.toLowerCase() === 'none' || reminder === '') { t.reminder = null; t.reminderFired = false; }
@@ -318,7 +326,8 @@ server.tool(
       archive.slice().reverse().map((t) => {
         const when = t.completedAt || t.archivedAt;
         return `• [${t.priority}] ${t.title}${when ? '  (' + new Date(when).toLocaleDateString() + ')' : ''}` +
-          (t.notes ? `\n    notes: ${t.notes}` : '');
+          (t.notes ? `\n    notes: ${t.notes}` : '') +
+          (t.claudeNotes ? `\n    notes for Claude: ${t.claudeNotes}` : '');
       }).join('\n')
     );
   }

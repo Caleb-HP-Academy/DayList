@@ -74,7 +74,9 @@ html, body {
 .progress-text { font-size: 11px; color: var(--text-dim); min-width: 42px; text-align: right; }
 
 /* ---------- Settings ---------- */
-.settings-panel { background: var(--bg-elev); border-bottom: 1px solid var(--border); padding: 8px 12px; flex: none; }
+.settings-panel { background: var(--bg-elev); border-bottom: 1px solid var(--border); padding: 8px 12px; flex: none; max-height: 60vh; overflow-y: auto; }
+.settings-panel::-webkit-scrollbar { width: 8px; }
+.settings-panel::-webkit-scrollbar-thumb { background: var(--bg-elev2); border-radius: 4px; }
 .settings-panel.hidden { display: none; }
 .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 12px; color: var(--text-dim); }
 .setting-row.hidden { display: none; }
