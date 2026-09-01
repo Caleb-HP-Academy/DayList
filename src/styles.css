@@ -127,6 +127,12 @@ html, body {
 .standup-body { padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 .standup-section { display: flex; flex-direction: column; gap: 6px; }
 .standup-q { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-dim); font-weight: 600; }
+.standup-import { display: flex; flex-direction: column; gap: 6px; background: var(--bg-elev2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+.standup-import.hidden { display: none; }
+.standup-import select {
+  background: var(--bg-elev); border: 1px solid var(--border); color: var(--text);
+  border-radius: 5px; padding: 4px 6px; font-size: 11px; outline: none; cursor: pointer;
+}
 .copy-btn {
   -webkit-app-region: no-drag;
   background: var(--accent); color: #fff; border: none; border-radius: 6px;

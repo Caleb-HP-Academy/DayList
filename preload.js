@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('daylist', {
   context: { store: STORE, mode: MODE, name: NAME },
 
   getTasks: () => ipcRenderer.invoke('get-tasks', STORE),
+  getProjectTasks: (projectId) => ipcRenderer.invoke('get-tasks', projectId),
   saveTasks: (data) => ipcRenderer.invoke('save-tasks', STORE, data),
   getSettings: () => ipcRenderer.invoke('get-settings', STORE),
   setAlwaysOnTop: (on) => ipcRenderer.invoke('set-always-on-top', STORE, on),

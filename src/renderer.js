@@ -668,7 +668,84 @@ function openStandup() {
   buildStandupChecks('#standup-t-checks', s.today, 'standup-today');
   refreshStandupText('#standup-y-checks', 'standup-yesterday');
   refreshStandupText('#standup-t-checks', 'standup-today');
+  $('#standup-import-yesterday').classList.add('hidden');
+  $('#standup-import-today').classList.add('hidden');
   $('#standup-modal').classList.remove('hidden');
+}
+
+// "Import from project" — pull tasks from a project into the standup draft
+// without needing to switch into that project's own window first.
+async function toggleImportPanel(which) {
+  const panel = $(`#standup-import-${which}`);
+  const opening = panel.classList.contains('hidden');
+  if (!opening) { panel.classList.add('hidden'); return; }
+  const sel = document.querySelector(`.standup-import-select[data-import="${which}"]`);
+  sel.innerHTML = '<option value="">Choose a project…</option>';
+  const projects = await daylist.listProjects();
+  projects.forEach((p) => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+  document.querySelector(`.standup-import-list[data-import="${which}"]`).innerHTML = '';
+  panel.classList.remove('hidden');
+}
+async function loadImportChecklist(which, projectId) {
+  const listEl = document.querySelector(`.standup-import-list[data-import="${which}"]`);
+  listEl.innerHTML = '';
+  if (!projectId) return;
+  const data = await daylist.getProjectTasks(projectId);
+  let titles;
+  if (which === 'yesterday') {
+    titles = data.tasks
+      .filter((t) => t.done && !t.personal)
+      .slice()
+      .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0))
+      .slice(0, 20)
+      .map((t) => t.title);
+  } else {
+    titles = data.tasks.filter((t) => !t.done && !t.personal).map((t) => t.title);
+  }
+  if (!titles.length) { listEl.innerHTML = '<div class="standup-empty">Nothing here.</div>'; return; }
+  const mainSel = which === 'yesterday' ? '#standup-y-checks' : '#standup-t-checks';
+  const textId = which === 'yesterday' ? 'standup-yesterday' : 'standup-today';
+  titles.forEach((title) => {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    const span = document.createElement('span');
+    span.textContent = title;
+    cb.addEventListener('change', () => {
+      if (!cb.checked) return;
+      addStandupCheckItem(mainSel, title, textId);
+      cb.disabled = true; // one-shot: it's been added, don't offer it again
+      label.classList.add('off');
+    });
+    label.appendChild(cb);
+    label.appendChild(span);
+    listEl.appendChild(label);
+  });
+}
+function addStandupCheckItem(containerSel, title, textId) {
+  const c = $(containerSel);
+  if ([...c.querySelectorAll('input')].some((i) => i.value === title)) return; // already present
+  const empty = c.querySelector('.standup-empty');
+  if (empty) empty.remove();
+  const label = document.createElement('label');
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = true;
+  cb.value = title;
+  const span = document.createElement('span');
+  span.textContent = title;
+  cb.addEventListener('change', () => {
+    label.classList.toggle('off', !cb.checked);
+    refreshStandupText(containerSel, textId);
+  });
+  label.appendChild(cb);
+  label.appendChild(span);
+  c.appendChild(label);
+  refreshStandupText(containerSel, textId);
 }
 
 function buildStandupChecks(containerSel, items, textId) {
@@ -1306,13 +1383,21 @@ function wireEvents() {
   document.querySelectorAll('.prio-sound-test').forEach((btn) => {
     btn.addEventListener('click', () => playPrioritySound(btn.dataset.priority));
   });
-  // Close any open priority-settings panel on an outside click. The gear
-  // button's own handler stops propagation, so this only ever sees clicks
-  // that aren't the click that just opened a panel.
+  // Close any open priority-settings / standup-import panel on an outside
+  // click. Each toggle button stops propagation, so this only ever sees
+  // clicks that aren't the click that just opened a panel.
   document.addEventListener('click', (e) => {
-    document.querySelectorAll('.prio-settings:not(.hidden)').forEach((panel) => {
+    document.querySelectorAll('.prio-settings:not(.hidden), .standup-import:not(.hidden)').forEach((panel) => {
       if (!panel.contains(e.target)) panel.classList.add('hidden');
     });
+  });
+
+  // Standup: import from project
+  document.querySelectorAll('[data-import-toggle]').forEach((btn) => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); toggleImportPanel(btn.dataset.importToggle); });
+  });
+  document.querySelectorAll('.standup-import-select').forEach((sel) => {
+    sel.addEventListener('change', (e) => loadImportChecklist(sel.dataset.import, e.target.value));
   });
 }
 

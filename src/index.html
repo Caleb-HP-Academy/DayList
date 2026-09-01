@@ -340,7 +340,14 @@
         <div class="standup-section">
           <div class="standup-q">
             <span id="standup-y-label">What did you do yesterday?</span>
-            <button class="copy-btn" data-copy="standup-yesterday">Copy</button>
+            <div style="display:flex;gap:6px;">
+              <button class="text-btn" data-import-toggle="yesterday">📥 Import</button>
+              <button class="copy-btn" data-copy="standup-yesterday">Copy</button>
+            </div>
+          </div>
+          <div id="standup-import-yesterday" class="standup-import hidden">
+            <select class="standup-import-select" data-import="yesterday"></select>
+            <div class="standup-checks standup-import-list" data-import="yesterday"></div>
           </div>
           <div id="standup-y-checks" class="standup-checks"></div>
           <textarea id="standup-yesterday" class="standup-text" rows="3"></textarea>
@@ -348,7 +355,14 @@
         <div class="standup-section">
           <div class="standup-q">
             <span>What will you do today?</span>
-            <button class="copy-btn" data-copy="standup-today">Copy</button>
+            <div style="display:flex;gap:6px;">
+              <button class="text-btn" data-import-toggle="today">📥 Import</button>
+              <button class="copy-btn" data-copy="standup-today">Copy</button>
+            </div>
+          </div>
+          <div id="standup-import-today" class="standup-import hidden">
+            <select class="standup-import-select" data-import="today"></select>
+            <div class="standup-checks standup-import-list" data-import="today"></div>
           </div>
           <div id="standup-t-checks" class="standup-checks"></div>
           <textarea id="standup-today" class="standup-text" rows="3"></textarea>
