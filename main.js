@@ -1176,10 +1176,15 @@ function checkForUpdates() {
             const latest = String(data.tag_name || '').replace(/^v/i, '');
             const current = app.getVersion();
             if (!latest) { resolve({ ok: false, error: 'No release found' }); return; }
+            // Prefer a direct link to the Windows installer asset so
+            // "Download" starts the file immediately instead of landing on
+            // the release page — fall back to the page if the asset naming
+            // ever changes.
+            const setupAsset = (data.assets || []).find((a) => /^DayList-Setup-.*\.exe$/i.test(a.name));
             resolve({
               ok: true, current, latest,
               updateAvailable: compareVersions(latest, current) > 0,
-              url: data.html_url || `https://github.com/${UPDATE_REPO}/releases`
+              url: setupAsset ? setupAsset.browser_download_url : (data.html_url || `https://github.com/${UPDATE_REPO}/releases`)
             });
           } catch (e) { resolve({ ok: false, error: 'Unexpected response' }); }
         });
