@@ -675,6 +675,17 @@ function openStandup() {
 
 // "Import from project" — pull tasks from a project into the standup draft
 // without needing to switch into that project's own window first.
+function priorWorkdays(n) {
+  const days = [];
+  let d = new Date();
+  d.setHours(0, 0, 0, 0);
+  while (days.length < n) {
+    d = new Date(d);
+    d.setDate(d.getDate() - 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) days.push(new Date(d));
+  }
+  return days;
+}
 async function toggleImportPanel(which) {
   const panel = $(`#standup-import-${which}`);
   const opening = panel.classList.contains('hidden');
@@ -688,7 +699,54 @@ async function toggleImportPanel(which) {
     sel.appendChild(opt);
   });
   document.querySelector(`.standup-import-list[data-import="${which}"]`).innerHTML = '';
+
+  // Day-picker (last 5 working days) — only meaningful for "yesterday",
+  // since "today" is about active tasks, not a specific completion date.
+  const daySel = document.querySelector(`.standup-import-day-select[data-import="${which}"]`);
+  if (daySel) {
+    daySel.innerHTML = '<option value="">— or pick a specific day —</option>';
+    priorWorkdays(5).forEach((d) => {
+      const opt = document.createElement('option');
+      opt.value = d.getTime();
+      opt.textContent = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      daySel.appendChild(opt);
+    });
+    document.querySelector(`.standup-import-day-list[data-import="${which}"]`).innerHTML = '';
+  }
   panel.classList.remove('hidden');
+}
+function loadImportDayChecklist(which, dayTimestamp) {
+  const listEl = document.querySelector(`.standup-import-day-list[data-import="${which}"]`);
+  listEl.innerHTML = '';
+  if (!dayTimestamp) return;
+  const target = parseInt(dayTimestamp, 10);
+  const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const pool = [...state.tasks.filter((t) => t.done && !t.personal), ...(state.archive || []).filter((t) => !t.personal)];
+  const titles = pool
+    .map((t) => ({ title: t.title, when: t.completedAt || t.archivedAt }))
+    .filter((x) => x.when)
+    .map((x) => ({ title: x.title, when: new Date(x.when) }))
+    .filter((x) => !isNaN(x.when) && startOfDay(x.when).getTime() === target)
+    .map((x) => x.title);
+  if (!titles.length) { listEl.innerHTML = '<div class="standup-empty">Nothing completed that day.</div>'; return; }
+  const mainSel = which === 'yesterday' ? '#standup-y-checks' : '#standup-t-checks';
+  const textId = which === 'yesterday' ? 'standup-yesterday' : 'standup-today';
+  titles.forEach((title) => {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    const span = document.createElement('span');
+    span.textContent = title;
+    cb.addEventListener('change', () => {
+      if (!cb.checked) return;
+      addStandupCheckItem(mainSel, title, textId);
+      cb.disabled = true;
+      label.classList.add('off');
+    });
+    label.appendChild(cb);
+    label.appendChild(span);
+    listEl.appendChild(label);
+  });
 }
 async function loadImportChecklist(which, projectId) {
   const listEl = document.querySelector(`.standup-import-list[data-import="${which}"]`);
@@ -1398,6 +1456,9 @@ function wireEvents() {
   });
   document.querySelectorAll('.standup-import-select').forEach((sel) => {
     sel.addEventListener('change', (e) => loadImportChecklist(sel.dataset.import, e.target.value));
+  });
+  document.querySelectorAll('.standup-import-day-select').forEach((sel) => {
+    sel.addEventListener('change', (e) => loadImportDayChecklist(sel.dataset.import, e.target.value));
   });
 }
 
