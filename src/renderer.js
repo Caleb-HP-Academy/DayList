@@ -645,6 +645,16 @@ function buildStandup() {
     const k = x.title.trim();
     if (k && !seen.has(k)) { seen.add(k); yesterday.push(x.title); }
   }
+  // Also include anything ticked off *today* — e.g. yesterday's leftovers
+  // completed in the morning before standup would otherwise fall in the gap
+  // between "yesterday" and the active list.
+  completed
+    .filter((x) => startOfDay(x.when).getTime() === todayStart.getTime())
+    .sort((a, b) => a.when - b.when)
+    .forEach((x) => {
+      const k = x.title.trim();
+      if (k && !seen.has(k)) { seen.add(k); yesterday.push(x.title); }
+    });
 
   const rank = { high: 0, medium: 1, low: 2 };
   const active = state.tasks.filter((t) => !t.done && !t.personal).slice();
